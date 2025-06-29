@@ -5,13 +5,31 @@ from typing import List, Dict
 
 def get_claude_client():
     """Claude API 클라이언트 초기화"""
-    api_key = os.getenv('ANTHROPIC_API_KEY') or st.secrets.get('ANTHROPIC_API_KEY')
+    # Streamlit Secrets에서 먼저 확인 (우선순위)
+    api_key = None
+    
+    try:
+        if hasattr(st, 'secrets'):
+            api_key = st.secrets.get('ANTHROPIC_API_KEY')
+            if api_key:
+                st.success(f"✅ Claude API 키 확인됨 (길이: {len(api_key)})")
+    except Exception as e:
+        st.warning(f"Secrets 읽기 실패: {str(e)}")
+    
+    # 로컬 환경변수 백업
+    if not api_key:
+        api_key = os.getenv('ANTHROPIC_API_KEY')
     
     if not api_key:
-        st.error("Claude API 키가 설정되지 않았습니다. .env 파일이나 Streamlit secrets에 ANTHROPIC_API_KEY를 설정해주세요.")
+        st.error("❌ Claude API 키가 설정되지 않았습니다. Streamlit Secrets에 ANTHROPIC_API_KEY를 설정해주세요.")
+        st.info("🔧 App 설정 → Secrets 탭에서 설정하세요")
         return None
     
-    return Anthropic(api_key=api_key)
+    try:
+        return Anthropic(api_key=api_key)
+    except Exception as e:
+        st.error(f"❌ Claude API 클라이언트 생성 실패: {str(e)}")
+        return None
 
 def generate_system_prompt(teacher_config: Dict) -> str:
     """AI 튜터의 시스템 프롬프트 생성"""
@@ -92,7 +110,7 @@ def get_claude_response(user_message: str, system_prompt: str, chat_history: Lis
         
         # Claude API 호출
         response = client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-3-5-sonnet-20240620",
             max_tokens=2000,
             temperature=0.7,
             system=system_prompt,
@@ -121,7 +139,21 @@ def generate_lesson_content(topic: str, teacher_config: Dict) -> str:
     칠판에 쓸 내용은 반드시 포맷팅 태그를 사용해주세요.
     """
     
-    return get_claude_response(lesson_request, system_prompt, [])
+    client = get_claude_client()
+    if not client:
+        return "API 연결에 실패했습니다."
+    
+    try:
+        response = client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=2000,
+            temperature=0.7,
+            system=system_prompt,
+            messages=[{"role": "user", "content": lesson_request}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        return f"수업 내용 생성 중 오류가 발생했습니다: {str(e)}"
 
 def check_api_status() -> bool:
     """Claude API 연결 상태 확인"""
@@ -132,7 +164,7 @@ def check_api_status() -> bool:
     try:
         # 간단한 테스트 메시지
         response = client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-3-5-sonnet-20240620",
             max_tokens=10,
             messages=[{"role": "user", "content": "안녕하세요"}]
         )
