@@ -1,6 +1,6 @@
 import json
 from typing import Dict, List, Optional
-from utils.cloud_storage import save_preset, get_preset, load_all_presets, delete_preset
+from utils.claude_storage import save_preset, get_preset, load_all_presets, delete_preset
 
 # 기본 프리셋 정의
 DEFAULT_PRESETS = {
