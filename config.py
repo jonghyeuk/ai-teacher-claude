@@ -15,7 +15,7 @@ APP_CONFIG = {
 # API 설정
 API_CONFIG = {
     "anthropic": {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-3-5-sonnet-20240620",
         "max_tokens": 2000,
         "temperature": 0.7,
     },
@@ -90,7 +90,7 @@ SUPPORTED_FILE_TYPES = {
 }
 
 def get_api_key(service: str) -> str:
-    """API 키 조회"""
+    """API 키 조회 (Streamlit Secrets 우선)"""
     key_map = {
         "anthropic": "ANTHROPIC_API_KEY",
         "google_cloud": "GOOGLE_CLOUD_CREDENTIALS",
@@ -101,17 +101,15 @@ def get_api_key(service: str) -> str:
     if not env_key:
         return ""
     
-    # 환경 변수에서 먼저 확인
-    api_key = os.getenv(env_key)
+    # Streamlit secrets에서 먼저 확인 (우선순위)
+    try:
+        if hasattr(st, 'secrets') and env_key in st.secrets:
+            return st.secrets[env_key]
+    except:
+        pass
     
-    # Streamlit secrets에서 확인
-    if not api_key and hasattr(st, 'secrets'):
-        try:
-            api_key = st.secrets.get(env_key)
-        except:
-            pass
-    
-    return api_key or ""
+    # 로컬 개발용 환경 변수 (백업)
+    return os.getenv(env_key, "")
 
 def is_api_configured(service: str) -> bool:
     """API 설정 여부 확인"""
