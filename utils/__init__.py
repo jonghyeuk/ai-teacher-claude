@@ -27,7 +27,7 @@ from .voice_handler import (
     test_voice_settings
 )
 
-from .cloude_storage import (
+from .claude_storage import (
     save_ai_teacher,
     load_all_teachers,
     load_recent_teachers,
