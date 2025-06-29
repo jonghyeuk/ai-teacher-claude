@@ -1,0 +1,185 @@
+version: '3.8'
+
+services:
+  # AI 튜터 팩토리 메인 애플리케이션
+  ai-tutor-factory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-tutor-factory
+    ports:
+      - "8501:8501"
+    environment:
+      # 환경 변수는 .env 파일에서 자동으로 로드됩니다
+      - STREAMLIT_ENV=production
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      # 데이터 영속성을 위한 볼륨 마운트
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai-tutor-network
+    depends_on:
+      - redis  # 선택사항: 세션 저장용
+
+  # Redis (선택사항) - 세션 및 캐시 저장용
+  redis:
+    image: redis:7-alpine
+    container_name: ai-tutor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - ai-tutor-network
+    command: redis-server --appendonly yes
+
+  # Nginx (선택사항) - 리버스 프록시 및 SSL 종료
+  nginx:
+    image: nginx:alpine
+    container_name: ai-tutor-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL 인증서 (있는 경우)
+    depends_on:
+      - ai-tutor-factory
+    restart: unless-stopped
+    networks:
+      - ai-tutor-network
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  ai-tutor-network:
+    driver: bridge
+
+# ==============================================================================
+# 사용법:
+#
+# 1. 기본 실행 (AI 튜터 팩토리만):
+#    docker-compose up ai-tutor-factory
+#
+# 2. 전체 스택 실행 (Redis 포함):
+#    docker-compose up
+#
+# 3. 백그라운드 실행:
+#    docker-compose up -d
+#
+# 4. 특정 서비스만 재시작:
+#    docker-compose restart ai-tutor-factory
+#
+# 5. 로그 확인:
+#    docker-compose logs -f ai-tutor-factory
+#
+# 6. 서비스 중지:
+#    docker-compose down
+#
+# 7. 볼륨까지 삭제 (데이터 완전 삭제):
+#    docker-compose down -v
+#
+# ==============================================================================
+
+# 개발 환경용 오버라이드 설정
+---
+# docker-compose.override.yml (개발용)
+version: '3.8'
+
+services:
+  ai-tutor-factory:
+    build:
+      target: development  # 개발용 빌드 스테이지 (Dockerfile에 추가 필요)
+    environment:
+      - STREAMLIT_ENV=development
+      - DEBUG=true
+    volumes:
+      # 개발 시 소스 코드 실시간 반영
+      - .:/app
+      - /app/data  # 개발 시에는 로컬 데이터 디렉토리 사용하지 않음
+    ports:
+      - "8501:8501"
+      - "8502:8502"  # 추가 개발 포트
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true"]
+
+# ==============================================================================
+# 프로덕션 환경용 설정
+# docker-compose.prod.yml
+---
+version: '3.8'
+
+services:
+  ai-tutor-factory:
+    image: ai-tutor-factory:latest  # 미리 빌드된 이미지 사용
+    environment:
+      - STREAMLIT_ENV=production
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
+    deploy:
+      replicas: 2  # 고가용성을 위한 복제
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 로드 밸런서 (프로덕션용)
+  traefik:
+    image: traefik:v2.9
+    container_name: ai-tutor-traefik
+    command:
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=admin@your-domain.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik 대시보드
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme.json:/acme.json
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`traefik.your-domain.com`)
+      - traefik.http.routers.api.service=api@internal
+
+# ==============================================================================
+# 환경별 실행 명령어:
+#
+# 개발 환경:
+# docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+#
+# 프로덕션 환경:
+# docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# ==============================================================================
