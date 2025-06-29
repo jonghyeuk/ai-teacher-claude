@@ -2,480 +2,446 @@ import streamlit as st
 import json
 import time
 from datetime import datetime
-from utils.claude_api import ClaudeAPI
-from utils.voice_handler import VoiceHandler
-from utils.cloud_storage import CloudStorage
-from utils.blackboard import SmartBlackboard
-import uuid
+from utils.claude_api import get_claude_response, generate_system_prompt
+from utils.voice_handler import text_to_speech, speech_to_text
+import re
 
 # 페이지 설정
 st.set_page_config(
     page_title="AI 튜터 모드",
-    page_icon="🎓",
+    page_icon="👨‍🏫",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 커스텀 CSS
+# CSS 스타일
 st.markdown("""
 <style>
     .teacher-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1rem;
+        padding: 15px;
         border-radius: 10px;
         text-align: center;
-        margin-bottom: 1rem;
+        color: white;
+        margin-bottom: 20px;
     }
     
     .blackboard {
-        background: #1e3a3a;
-        color: #00ff00;
-        font-family: 'Courier New', monospace;
-        padding: 2rem;
+        background: #2d3748;
+        color: #e2e8f0;
+        padding: 20px;
         border-radius: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        line-height: 1.6;
         min-height: 400px;
-        margin: 1rem 0;
-        border: 3px solid #4a6741;
-        box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-        position: relative;
+        border: 3px solid #4a5568;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
         overflow-y: auto;
-    }
-    
-    .blackboard-text {
-        font-size: 1.2rem;
-        line-height: 1.8;
         white-space: pre-wrap;
-        word-wrap: break-word;
     }
     
-    .highlight-red { color: #ff6b6b; font-weight: bold; }
-    .highlight-yellow { color: #ffd93d; font-weight: bold; }
-    .highlight-blue { color: #6bcf7f; font-weight: bold; }
-    .highlight-orange { color: #ff8c42; font-weight: bold; }
-    .underline { text-decoration: underline; }
-    .circle { 
-        border: 2px solid #ff6b6b; 
-        border-radius: 50%; 
-        padding: 0.2rem 0.5rem; 
-        display: inline-block; 
-        margin: 0.2rem;
+    .blackboard h1, .blackboard h2, .blackboard h3 {
+        color: #ffd700;
+        text-decoration: underline;
+        margin: 20px 0 10px 0;
+    }
+    
+    .blackboard .important {
+        background: #yellow;
+        color: #000;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    
+    .blackboard .formula {
+        background: #4a90e2;
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 18px;
+        text-align: center;
+        margin: 10px 0;
+        border-left: 4px solid #ffd700;
+    }
+    
+    .blackboard .highlight-red {
+        color: #ff6b6b;
+        font-weight: bold;
+    }
+    
+    .blackboard .highlight-blue {
+        color: #4dabf7;
+        font-weight: bold;
+    }
+    
+    .blackboard .highlight-green {
+        color: #51cf66;
+        font-weight: bold;
+    }
+    
+    .blackboard .circle {
+        border: 2px solid #ffd700;
+        border-radius: 50%;
+        padding: 5px 10px;
+        display: inline-block;
+        margin: 2px;
     }
     
     .mic-button {
-        background: linear-gradient(45deg, #ff4757, #ff3742);
+        background: #e74c3c;
         color: white;
         border: none;
         border-radius: 50%;
         width: 80px;
         height: 80px;
-        font-size: 2rem;
+        font-size: 24px;
         cursor: pointer;
-        box-shadow: 0 4px 15px rgba(255,71,87,0.4);
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
         transition: all 0.3s ease;
+        margin: 20px;
     }
     
     .mic-button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(255,71,87,0.6);
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
     }
     
-    .mic-button.recording {
-        background: linear-gradient(45deg, #ff6b6b, #ff5252);
-        animation: pulse 1.5s infinite;
+    .mic-button.active {
+        background: #27ae60;
+        animation: pulse 1s infinite;
     }
     
     @keyframes pulse {
         0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
+        50% { transform: scale(1.05); }
         100% { transform: scale(1); }
     }
     
-    .control-panel {
+    .chat-container {
         background: #f8f9fa;
-        padding: 1rem;
         border-radius: 10px;
-        margin: 1rem 0;
+        padding: 15px;
+        max-height: 300px;
+        overflow-y: auto;
         border: 1px solid #dee2e6;
     }
     
-    .status-bar {
-        background: #e9ecef;
-        padding: 0.5rem 1rem;
-        border-radius: 5px;
-        text-align: center;
-        margin: 0.5rem 0;
+    .user-message {
+        background: #007bff;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px 15px 5px 15px;
+        margin: 5px 0;
+        margin-left: 50px;
+        word-wrap: break-word;
     }
     
-    .math-formula {
-        background: rgba(255,255,255,0.1);
-        padding: 0.5rem;
-        border-radius: 5px;
-        border-left: 3px solid #ffd93d;
-        margin: 0.5rem 0;
-        font-family: 'Times New Roman', serif;
+    .ai-message {
+        background: #28a745;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px 15px 15px 5px;
+        margin: 5px 0;
+        margin-right: 50px;
+        word-wrap: break-word;
     }
     
-    .typing-cursor {
-        animation: blink 1s infinite;
-    }
-    
-    @keyframes blink {
-        0%, 50% { opacity: 1; }
-        51%, 100% { opacity: 0; }
-    }
-    
-    .voice-controls {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1rem;
-        padding: 1rem;
-        background: #f8f9fa;
+    .control-panel {
+        background: white;
+        padding: 20px;
         border-radius: 10px;
-        margin: 1rem 0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        margin: 20px 0;
+    }
+    
+    .typing-animation {
+        animation: typewriter 0.05s steps(1) infinite;
+    }
+    
+    @keyframes typewriter {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-def initialize_teacher_session():
-    """AI 튜터 세션 초기화"""
-    if 'teacher_config' not in st.session_state:
-        st.session_state.teacher_config = None
-    if 'claude_api' not in st.session_state:
-        st.session_state.claude_api = ClaudeAPI()
-    if 'voice_handler' not in st.session_state:
-        st.session_state.voice_handler = VoiceHandler()
-    if 'blackboard' not in st.session_state:
-        st.session_state.blackboard = SmartBlackboard()
-    if 'conversation_history' not in st.session_state:
-        st.session_state.conversation_history = []
+def initialize_teacher():
+    """AI 튜터 초기화"""
+    if 'selected_teacher' not in st.session_state:
+        st.error("AI 튜터가 선택되지 않았습니다. 메인 페이지로 돌아가세요.")
+        if st.button("🏠 메인 페이지로"):
+            st.switch_page("app.py")
+        return None
+    
+    teacher = st.session_state.selected_teacher
+    
+    # 대화 히스토리 초기화
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # 칠판 내용 초기화
+    if 'blackboard_content' not in st.session_state:
+        st.session_state.blackboard_content = f"🎓 {teacher['name']}의 {teacher['subject']} 수업\n\n📚 교육 수준: {teacher['level']}\n\n수업을 시작할 준비가 되었습니다!\n마이크 버튼을 눌러 질문하거나 수업을 요청해보세요."
+    
+    # 마이크 상태
     if 'is_recording' not in st.session_state:
         st.session_state.is_recording = False
-    if 'is_speaking' not in st.session_state:
-        st.session_state.is_speaking = False
-    if 'blackboard_content' not in st.session_state:
-        st.session_state.blackboard_content = ""
+    
+    return teacher
 
-def load_teacher_config(teacher_id):
-    """AI 튜터 설정 로드"""
-    try:
-        cloud_storage = CloudStorage()
-        config = cloud_storage.load_teacher(teacher_id)
-        st.session_state.teacher_config = config
-        return config
-    except Exception as e:
-        st.error(f"AI 튜터 로딩 실패: {str(e)}")
-        return None
-
-def render_teacher_header(config):
-    """AI 튜터 헤더"""
-    ai_name = config['ai_identity']['ai_name']
-    ai_title = config['ai_identity']['ai_title']
-    field = config['specialty_settings']['selected_field']
-    level = config['specialty_settings']['education_level']
-    
-    level_text = {
-        'middle_school': '중학교',
-        'high_school': '고등학교', 
-        'university': '대학교',
-        'graduate': '대학원'
-    }.get(level, level)
-    
-    st.markdown(f"""
-    <div class="teacher-header">
-        <h1>🎓 {ai_name} {ai_title}</h1>
-        <p>📚 {field} 전문 | 🎯 {level_text} 수준</p>
-        <p><small>음성 명령으로 AI와 상호작용하세요</small></p>
-    </div>
-    """, unsafe_allow_html=True)
-
-def render_blackboard():
-    """스마트 칠판 렌더링"""
-    st.markdown("### 📝 AI 칠판")
-    
-    # 칠판 영역
-    blackboard_placeholder = st.empty()
-    
-    with blackboard_placeholder.container():
-        st.markdown(f"""
-        <div class="blackboard">
-            <div class="blackboard-text" id="blackboard-content">
-                {st.session_state.blackboard_content}
-                <span class="typing-cursor">|</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    return blackboard_placeholder
-
-def render_voice_controls():
-    """음성 컨트롤 패널"""
-    st.markdown("### 🎤 음성 컨트롤")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # 메인 마이크 버튼
-        mic_container = st.empty()
-        
-        recording_status = "recording" if st.session_state.is_recording else ""
-        mic_text = "🎙️ 녹음 중..." if st.session_state.is_recording else "🎤 PUSH TO TALK"
-        
-        if st.button(
-            mic_text,
-            key="main_mic_button",
-            help="길게 눌러서 음성 입력",
-            use_container_width=True
-        ):
-            toggle_recording()
-    
-    # 상태 표시
-    status_container = st.empty()
-    
-    if st.session_state.is_recording:
-        status_container.markdown("""
-        <div class="status-bar" style="background: #ffe6e6; color: #d63031;">
-            🔴 음성 입력 중... 마이크에 대고 말씀하세요
-        </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state.is_speaking:
-        status_container.markdown("""
-        <div class="status-bar" style="background: #e6f3ff; color: #0984e3;">
-            🗣️ AI가 응답하는 중...
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        status_container.markdown("""
-        <div class="status-bar" style="background: #e8f5e8; color: #00b894;">
-            ✅ 준비 완료 - 마이크 버튼을 눌러 질문하세요
-        </div>
-        """, unsafe_allow_html=True)
-    
-    return status_container
-
-def toggle_recording():
-    """녹음 상태 토글"""
-    if st.session_state.is_recording:
-        # 녹음 중지
-        st.session_state.is_recording = False
-        process_voice_input()
-    else:
-        # 녹음 시작
-        st.session_state.is_recording = True
-        st.session_state.voice_handler.start_recording()
-
-def process_voice_input():
-    """음성 입력 처리"""
-    try:
-        # 음성을 텍스트로 변환
-        user_input = st.session_state.voice_handler.speech_to_text()
-        
-        if user_input:
-            # 대화 히스토리에 추가
-            st.session_state.conversation_history.append({
-                'role': 'user',
-                'content': user_input,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-            # AI 응답 생성
-            generate_ai_response(user_input)
-            
-        else:
-            st.warning("음성을 인식하지 못했습니다. 다시 시도해주세요.")
-            
-    except Exception as e:
-        st.error(f"음성 처리 오류: {str(e)}")
-
-def generate_ai_response(user_input):
-    """AI 응답 생성 및 칠판 업데이트"""
-    try:
-        st.session_state.is_speaking = True
-        
-        # Claude API 호출
-        config = st.session_state.teacher_config
-        response = st.session_state.claude_api.generate_response(
-            user_input, 
-            config, 
-            st.session_state.conversation_history
-        )
-        
-        # 응답을 대화 히스토리에 추가
-        st.session_state.conversation_history.append({
-            'role': 'assistant',
-            'content': response['text'],
-            'timestamp': datetime.now().isoformat(),
-            'blackboard_content': response.get('blackboard_content', '')
-        })
-        
-        # 칠판 업데이트 (타이핑 애니메이션)
-        update_blackboard_with_animation(response.get('blackboard_content', ''))
-        
-        # 음성 출력
-        if config['voice_settings']['auto_speak']:
-            st.session_state.voice_handler.text_to_speech(
-                response['text'], 
-                config['voice_settings']
-            )
-        
-        st.session_state.is_speaking = False
-        
-    except Exception as e:
-        st.error(f"AI 응답 생성 오류: {str(e)}")
-        st.session_state.is_speaking = False
-
-def update_blackboard_with_animation(content):
-    """칠판 내용을 타이핑 애니메이션으로 업데이트"""
-    if not content:
-        return
-    
-    # 기존 내용에 새 내용 추가
-    if st.session_state.blackboard_content:
-        st.session_state.blackboard_content += "\n\n"
-    
-    # 타이핑 애니메이션 시뮬레이션
-    for i in range(len(content)):
-        st.session_state.blackboard_content += content[i]
-        time.sleep(0.05)  # 타이핑 속도 조절
-
-def format_blackboard_content(text):
-    """칠판 내용 포맷팅 (색상, 강조 등)"""
+def format_blackboard_text(text):
+    """칠판에 표시할 텍스트 포맷팅"""
     # 수식 감지 및 포맷팅
-    if any(math_symbol in text for math_symbol in ['=', '+', '-', '×', '÷', '∫', '∑']):
-        text = f'<div class="math-formula">{text}</div>'
+    text = re.sub(r'\$([^$]+)\$', r'<div class="formula">\1</div>', text)
     
-    # 중요 키워드 강조
-    important_keywords = ['중요', '주의', '핵심', '공식', '법칙', '원리']
-    for keyword in important_keywords:
-        text = text.replace(keyword, f'<span class="highlight-red">{keyword}</span>')
+    # 중요한 단어 강조 (대문자나 **로 감싸진 텍스트)
+    text = re.sub(r'\*\*([^*]+)\*\*', r'<span class="important">\1</span>', text)
     
-    # 숫자 강조
-    import re
-    text = re.sub(r'\b\d+\b', r'<span class="highlight-yellow">\g<0></span>', text)
+    # 색상 태그 변환
+    text = re.sub(r'\[RED\]([^[]+)\[/RED\]', r'<span class="highlight-red">\1</span>', text)
+    text = re.sub(r'\[BLUE\]([^[]+)\[/BLUE\]', r'<span class="highlight-blue">\1</span>', text)
+    text = re.sub(r'\[GREEN\]([^[]+)\[/GREEN\]', r'<span class="highlight-green">\1</span>', text)
+    
+    # 원 표시 (중요한 부분)
+    text = re.sub(r'\[CIRCLE\]([^[]+)\[/CIRCLE\]', r'<span class="circle">\1</span>', text)
     
     return text
 
-def render_conversation_history():
-    """대화 히스토리 표시"""
-    if not st.session_state.conversation_history:
-        st.info("아직 대화가 없습니다. 마이크 버튼을 눌러 질문해보세요!")
-        return
+def animate_blackboard_writing(text, container):
+    """칠판에 글씨를 타이핑하는 애니메이션"""
+    formatted_text = format_blackboard_text(text)
     
-    st.markdown("### 💬 대화 히스토리")
+    # 실제로는 바로 표시 (실시간 타이핑은 복잡하므로 간소화)
+    container.markdown(f'<div class="blackboard">{formatted_text}</div>', unsafe_allow_html=True)
     
-    with st.expander("대화 기록 보기", expanded=False):
-        for msg in st.session_state.conversation_history[-10:]:  # 최근 10개만 표시
-            if msg['role'] == 'user':
-                st.markdown(f"**🙋‍♂️ 학생:** {msg['content']}")
-            else:
-                st.markdown(f"**🎓 AI 튜터:** {msg['content']}")
-            st.markdown(f"<small>{msg['timestamp'][:19]}</small>", unsafe_allow_html=True)
-            st.markdown("---")
-
-def render_control_panel():
-    """컨트롤 패널"""
-    st.markdown("### ⚙️ 컨트롤 패널")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("🗑️ 칠판 지우기", use_container_width=True):
-            st.session_state.blackboard_content = ""
-            st.rerun()
-    
-    with col2:
-        if st.button("🔄 대화 초기화", use_container_width=True):
-            st.session_state.conversation_history = []
-            st.session_state.blackboard_content = ""
-            st.rerun()
-    
-    with col3:
-        if st.button("⏸️ 음성 중지", use_container_width=True):
-            st.session_state.voice_handler.stop_speech()
-            st.session_state.is_speaking = False
-    
-    with col4:
-        if st.button("🏠 메인으로", use_container_width=True):
-            st.switch_page("app.py")
-
-def render_quick_commands():
-    """빠른 명령어 버튼들"""
-    st.markdown("### ⚡ 빠른 명령어")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    commands = [
-        ("개념 설명해줘", "💡 개념 설명"),
-        ("실험 방법 알려줘", "🧪 실험 방법"),
-        ("예시 들어줘", "📝 예시"),
-        ("문제 풀어줘", "🎯 문제 풀이"),
-        ("정리해줘", "📋 정리"),
-        ("질문 받아줘", "❓ 질문 받기")
-    ]
-    
-    for i, (command, button_text) in enumerate(commands):
-        col = [col1, col2, col3][i % 3]
-        with col:
-            if st.button(button_text, key=f"quick_cmd_{i}", use_container_width=True):
-                # 음성 없이 직접 AI에게 명령 전달
-                st.session_state.conversation_history.append({
-                    'role': 'user',
-                    'content': command,
-                    'timestamp': datetime.now().isoformat()
-                })
-                generate_ai_response(command)
-                st.rerun()
+    return formatted_text
 
 def main():
-    """메인 함수"""
-    initialize_teacher_session()
-    
-    # URL 파라미터에서 teacher_id 가져오기
-    query_params = st.experimental_get_query_params()
-    teacher_id = query_params.get('id', [None])[0]
-    
-    if not teacher_id:
-        st.error("AI 튜터 ID가 없습니다. 메인 페이지에서 AI 튜터를 생성해주세요.")
-        if st.button("🏠 메인 페이지로 돌아가기"):
-            st.switch_page("app.py")
+    teacher = initialize_teacher()
+    if not teacher:
         return
     
-    # AI 튜터 설정 로드
-    if st.session_state.teacher_config is None:
-        config = load_teacher_config(teacher_id)
-        if not config:
-            return
-    else:
-        config = st.session_state.teacher_config
+    # 헤더
+    st.markdown(f"""
+    <div class="teacher-header">
+        <h1>👨‍🏫 {teacher['name']}</h1>
+        <p>{teacher['subject']} | {teacher['level']} 수준</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # 헤더 렌더링
-    render_teacher_header(config)
+    # 종료 버튼
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("🏠 메인으로 돌아가기"):
+            # 세션 클리어
+            if 'chat_history' in st.session_state:
+                del st.session_state.chat_history
+            if 'blackboard_content' in st.session_state:
+                del st.session_state.blackboard_content
+            st.switch_page("app.py")
+    
+    with col3:
+        if st.button("🗑️ 칠판 지우기"):
+            st.session_state.blackboard_content = ""
+            st.rerun()
     
     # 메인 레이아웃
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        # 칠판 영역
-        blackboard_placeholder = render_blackboard()
+        st.subheader("📋 AI 칠판")
+        blackboard_container = st.empty()
         
-        # 음성 컨트롤
-        render_voice_controls()
+        # 칠판 내용 표시
+        if st.session_state.blackboard_content:
+            animate_blackboard_writing(st.session_state.blackboard_content, blackboard_container)
+        else:
+            blackboard_container.markdown('<div class="blackboard">칠판이 비어있습니다.</div>', unsafe_allow_html=True)
     
     with col2:
-        # 빠른 명령어
-        render_quick_commands()
+        st.subheader("🎤 음성 컨트롤")
         
-        # 컨트롤 패널
-        render_control_panel()
+        # Push-to-Talk 버튼
+        mic_container = st.empty()
         
-        # 대화 히스토리
-        render_conversation_history()
+        if st.session_state.is_recording:
+            if mic_container.button("🎤 녹음 중... (놓으면 전송)", key="stop_recording", help="버튼을 놓으면 음성 전송"):
+                st.session_state.is_recording = False
+                # 여기서 음성 인식 처리
+                process_voice_input()
+                st.rerun()
+        else:
+            if mic_container.button("🎤 눌러서 말하기", key="start_recording", help="버튼을 누르고 있는 동안 녹음"):
+                st.session_state.is_recording = True
+                st.rerun()
+        
+        # 음성 설정
+        st.subheader("🔊 음성 설정")
+        with st.expander("설정 조절"):
+            voice_speed = st.slider("음성 속도", 0.5, 2.0, teacher['voice_settings']['speed'], 0.1)
+            voice_pitch = st.slider("음성 높이", 0.5, 2.0, teacher['voice_settings']['pitch'], 0.1)
+            auto_play = st.checkbox("자동 재생", teacher['voice_settings']['auto_play'])
+        
+        # 채팅 히스토리
+        st.subheader("💬 대화 기록")
+        chat_container = st.container()
+        
+        with chat_container:
+            if st.session_state.chat_history:
+                chat_html = '<div class="chat-container">'
+                for message in st.session_state.chat_history[-5:]:  # 최근 5개만 표시
+                    if message['role'] == 'user':
+                        chat_html += f'<div class="user-message">👤 {message["content"]}</div>'
+                    else:
+                        chat_html += f'<div class="ai-message">🤖 {message["content"]}</div>'
+                chat_html += '</div>'
+                st.markdown(chat_html, unsafe_allow_html=True)
+            else:
+                st.info("아직 대화가 없습니다. 마이크 버튼을 눌러 시작해보세요!")
     
-    # 실시간 업데이트를 위한 자동 새로고침 (선택적)
-    if st.session_state.is_recording or st.session_state.is_speaking:
-        time.sleep(1)
-        st.rerun()
+    # 컨트롤 패널
+    with st.expander("⚙️ 고급 설정", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📝 칠판에 메모 추가"):
+                custom_text = st.text_area("추가할 내용:")
+                if custom_text and st.button("추가"):
+                    st.session_state.blackboard_content += f"\n\n📝 메모: {custom_text}"
+                    st.rerun()
+        
+        with col2:
+            if st.button("🎯 특정 주제 요청"):
+                topic = st.text_input("학습하고 싶은 주제:")
+                if topic and st.button("요청"):
+                    process_topic_request(topic)
+                    st.rerun()
+        
+        with col3:
+            if st.button("💾 수업 내용 저장"):
+                save_lesson_content()
+
+def process_voice_input():
+    """음성 입력 처리"""
+    try:
+        # 실제로는 speech_to_text 함수 사용
+        # 여기서는 시뮬레이션
+        user_input = "안녕하세요, 전자기 유도에 대해 설명해주세요"  # 임시
+        
+        if user_input:
+            # 사용자 메시지 추가
+            st.session_state.chat_history.append({
+                'role': 'user',
+                'content': user_input,
+                'timestamp': datetime.now()
+            })
+            
+            # AI 응답 생성
+            teacher = st.session_state.selected_teacher
+            system_prompt = generate_system_prompt(teacher)
+            
+            ai_response = get_claude_response(user_input, system_prompt, st.session_state.chat_history)
+            
+            # AI 응답 추가
+            st.session_state.chat_history.append({
+                'role': 'assistant',
+                'content': ai_response,
+                'timestamp': datetime.now()
+            })
+            
+            # 칠판에 내용 추가
+            update_blackboard_with_response(ai_response)
+            
+            # 음성 재생 (설정이 켜져있다면)
+            if teacher['voice_settings']['auto_play']:
+                text_to_speech(ai_response, teacher['voice_settings'])
+                
+    except Exception as e:
+        st.error(f"음성 처리 중 오류가 발생했습니다: {str(e)}")
+
+def update_blackboard_with_response(response):
+    """AI 응답을 칠판에 업데이트"""
+    # 칠판 형식으로 변환
+    blackboard_text = format_response_for_blackboard(response)
+    
+    # 기존 내용에 추가
+    if st.session_state.blackboard_content:
+        st.session_state.blackboard_content += f"\n\n{'='*50}\n\n{blackboard_text}"
+    else:
+        st.session_state.blackboard_content = blackboard_text
+
+def format_response_for_blackboard(response):
+    """응답을 칠판 형식으로 포맷팅"""
+    # 제목 찾기
+    lines = response.split('\n')
+    formatted = ""
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            formatted += "\n"
+            continue
+            
+        # 제목으로 보이는 라인 (짧고 중요해 보이는)
+        if len(line) < 50 and ('법칙' in line or '공식' in line or '원리' in line):
+            formatted += f"\n## {line}\n"
+        # 수식으로 보이는 라인
+        elif '=' in line and len(line) < 100:
+            formatted += f"\n[BLUE]${line}$[/BLUE]\n"
+        # 중요한 키워드 강조
+        elif any(keyword in line for keyword in ['중요', '핵심', '주의', '기억']):
+            formatted += f"\n[RED]**{line}**[/RED]\n"
+        else:
+            formatted += f"{line}\n"
+    
+    return formatted
+
+def process_topic_request(topic):
+    """특정 주제 요청 처리"""
+    request = f"{topic}에 대해 상세히 설명해주세요. 칠판에 중요한 내용을 정리해서 써주세요."
+    
+    # 채팅 히스토리에 추가
+    st.session_state.chat_history.append({
+        'role': 'user',
+        'content': request,
+        'timestamp': datetime.now()
+    })
+    
+    # AI 응답 생성
+    teacher = st.session_state.selected_teacher
+    system_prompt = generate_system_prompt(teacher)
+    
+    ai_response = get_claude_response(request, system_prompt, st.session_state.chat_history)
+    
+    # 응답 처리
+    st.session_state.chat_history.append({
+        'role': 'assistant',
+        'content': ai_response,
+        'timestamp': datetime.now()
+    })
+    
+    update_blackboard_with_response(ai_response)
+
+def save_lesson_content():
+    """수업 내용 저장"""
+    if st.session_state.blackboard_content:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        teacher_name = st.session_state.selected_teacher['name']
+        
+        # 파일로 저장하는 로직 (실제로는 클라우드 저장)
+        content = f"# {teacher_name} 수업 내용\n날짜: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{st.session_state.blackboard_content}"
+        
+        st.success(f"수업 내용이 저장되었습니다! (파일명: lesson_{timestamp}.md)")
+        
+        # 다운로드 버튼
+        st.download_button(
+            label="📥 수업 내용 다운로드",
+            data=content,
+            file_name=f"lesson_{teacher_name}_{timestamp}.md",
+            mime="text/markdown"
+        )
 
 if __name__ == "__main__":
     main()
