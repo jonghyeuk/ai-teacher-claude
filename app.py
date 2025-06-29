@@ -68,7 +68,16 @@ def main():
         recent_teachers = load_recent_teachers()
         
         if recent_teachers:
+            # 중복 제거 (ID 기준)
+            seen_ids = set()
+            unique_teachers = []
             for teacher in recent_teachers:
+                teacher_id = teacher.get('id', str(len(unique_teachers)))
+                if teacher_id not in seen_ids:
+                    seen_ids.add(teacher_id)
+                    unique_teachers.append(teacher)
+            
+            for i, teacher in enumerate(unique_teachers):
                 with st.container():
                     st.markdown(f"""
                     <div class="teacher-card">
@@ -79,7 +88,9 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button(f"▶️ {teacher['name']} 실행", key=f"run_{teacher['id']}"):
+                    # 고유한 key 생성 (인덱스 포함)
+                    unique_key = f"run_{teacher.get('id', i)}_{i}"
+                    if st.button(f"▶️ {teacher['name']} 실행", key=unique_key):
                         st.session_state.selected_teacher = teacher
                         st.switch_page("pages/teacher_mode.py")
         else:
@@ -294,8 +305,8 @@ def manage_presets():
             else:
                 st.error("프리셋 이름을 입력해주세요!")
 
-if __name__ == "__main__":
-    main()
+# Streamlit 앱 시작
+main()
 
 # 페이지 설정
 st.set_page_config(
