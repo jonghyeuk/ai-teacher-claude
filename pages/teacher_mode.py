@@ -61,10 +61,87 @@ def generate_system_prompt(teacher_config):
 학생들에게 도움이 되는 교육적인 답변을 해주세요.
 칠판에 쓸 내용이 있다면 **중요내용**으로 강조해주세요."""
 
-# 음성 함수들 간단 정의
+# 음성 함수들 - 브라우저 TTS 사용
 def text_to_speech(text, voice_settings):
-    """텍스트를 음성으로 변환 (나중에 구현)"""
-    st.info(f"🔊 음성 재생: {text[:50]}...")
+    """텍스트를 음성으로 변환 - 브라우저 TTS 사용"""
+    try:
+        # 텍스트 정리 (특수문자 제거)
+        clean_text = text.replace('"', '').replace("'", "").replace('\n', ' ')
+        clean_text = clean_text.replace('**', '').replace('*', '')
+        
+        # 음성 설정
+        speed = voice_settings.get('speed', 1.0)
+        pitch = voice_settings.get('pitch', 1.0)
+        
+        # 브라우저 TTS JavaScript 코드
+        tts_html = f"""
+        <script>
+        function speakText() {{
+            // 기존 음성 정지
+            speechSynthesis.cancel();
+            
+            const text = `{clean_text}`;
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // 한국어 설정
+            utterance.lang = 'ko-KR';
+            utterance.rate = {speed};
+            utterance.pitch = {pitch};
+            utterance.volume = 0.8;
+            
+            // 한국어 음성 찾기
+            const voices = speechSynthesis.getVoices();
+            const koreanVoice = voices.find(voice => 
+                voice.lang.includes('ko') || 
+                voice.name.includes('Korean') ||
+                voice.name.includes('한국')
+            );
+            
+            if (koreanVoice) {{
+                utterance.voice = koreanVoice;
+                console.log('한국어 음성 사용:', koreanVoice.name);
+            }} else {{
+                console.log('기본 음성 사용');
+            }}
+            
+            // 이벤트 핸들러
+            utterance.onstart = function() {{
+                console.log('음성 재생 시작');
+            }};
+            
+            utterance.onend = function() {{
+                console.log('음성 재생 완료');
+            }};
+            
+            utterance.onerror = function(event) {{
+                console.error('음성 재생 오류:', event.error);
+            }};
+            
+            // 음성 재생
+            speechSynthesis.speak(utterance);
+        }}
+        
+        // 음성 목록이 로드되면 실행
+        if (speechSynthesis.getVoices().length > 0) {{
+            speakText();
+        }} else {{
+            speechSynthesis.onvoiceschanged = function() {{
+                speakText();
+            }};
+        }}
+        </script>
+        
+        <div style="padding: 10px; background: #e8f5e8; border-radius: 5px; margin: 5px 0;">
+            🔊 음성 재생 중: "{clean_text[:50]}{'...' if len(clean_text) > 50 else ''}"
+        </div>
+        """
+        
+        # Streamlit에서 HTML 렌더링
+        st.components.v1.html(tts_html, height=80)
+        
+    except Exception as e:
+        st.warning(f"음성 재생 오류: {str(e)}")
+        st.info("브라우저에서 음성 재생을 허용해주세요.")
 
 def speech_to_text():
     """음성을 텍스트로 변환 (나중에 구현)"""
@@ -427,7 +504,12 @@ def process_text_input(user_input):
                     # 칠판에 내용 추가
                     update_blackboard_with_response(ai_response)
                     
-                    st.success("✅ AI 응답 완료!")
+                    # 🔊 자동 음성 재생 (설정이 켜져있다면)
+                    if teacher.get('voice_settings', {}).get('auto_play', True):
+                        st.success("✅ AI 응답 완료! 🔊 음성으로 재생합니다...")
+                        text_to_speech(ai_response, teacher['voice_settings'])
+                    else:
+                        st.success("✅ AI 응답 완료!")
                 else:
                     st.error("❌ AI 응답이 비어있습니다.")
                     
