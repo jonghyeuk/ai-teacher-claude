@@ -473,7 +473,7 @@ def main():
                 save_lesson_content()
 
 def process_text_input(user_input):
-    """텍스트 입력 처리"""
+    """텍스트 입력 처리 - 안전한 방식"""
     try:
         if user_input:
             # 사용자 메시지 추가
@@ -500,18 +500,21 @@ def process_text_input(user_input):
                         'timestamp': datetime.now()
                     })
                     
-                    # 🎬 실시간 타이핑 애니메이션 + TTS 시작!
+                    # ✅ 안전한 칠판 업데이트 + TTS
                     if teacher.get('voice_settings', {}).get('auto_play', True):
-                        st.success("✅ AI 응답 완료! 🎬 실시간 타이핑 + 음성 시작...")
+                        st.success("✅ AI 응답 완료! 🔊 음성으로 읽어드립니다...")
                         update_blackboard_with_response(ai_response)
                     else:
-                        # 음성 없이 일반 칠판 업데이트
+                        # 음성 없이 칠판만 업데이트
                         blackboard_text = format_response_for_blackboard(ai_response)
                         if st.session_state.blackboard_content:
                             st.session_state.blackboard_content += f"\n\n{'='*50}\n\n{blackboard_text}"
                         else:
                             st.session_state.blackboard_content = blackboard_text
                         st.success("✅ AI 응답 완료! (음성 재생 꺼짐)")
+                        
+                    # 페이지 자동 새로고침으로 칠판 업데이트
+                    st.rerun()
                 else:
                     st.error("❌ AI 응답이 비어있습니다.")
                     
@@ -530,218 +533,60 @@ def process_voice_input():
     process_text_input(test_message)
 
 def update_blackboard_with_response(response):
-    """AI 응답을 칠판에 실시간 타이핑 애니메이션으로 표시"""
-    # 기존 칠판 내용
+    """AI 응답을 칠판에 안전하게 표시 + 간단한 TTS"""
+    # 칠판 형식으로 변환
+    blackboard_text = format_response_for_blackboard(response)
+    
+    # 기존 내용에 추가
     if st.session_state.blackboard_content:
-        existing_content = st.session_state.blackboard_content + "\n\n" + "="*50 + "\n\n"
+        st.session_state.blackboard_content += f"\n\n{'='*50}\n\n{blackboard_text}"
     else:
-        existing_content = ""
+        st.session_state.blackboard_content = blackboard_text
     
-    # 새로운 내용 포맷팅
-    new_content = format_response_for_blackboard(response)
-    
-    # 실시간 타이핑 애니메이션 시작
-    create_typing_animation(existing_content, new_content, response)
+    # 간단한 TTS (복잡한 JavaScript 제거)
+    create_simple_tts(response)
 
-def create_typing_animation(existing_content, new_content, speech_text):
-    """실시간 타이핑 애니메이션 + TTS 생성"""
+def create_simple_tts(speech_text):
+    """안전하고 간단한 TTS"""
+    # 텍스트 정리
+    clean_text = speech_text.replace('\n', ' ').replace('"', '').replace("'", '')
+    clean_text = clean_text.replace('**', '').replace('*', '')[:300]  # 길이 제한
     
-    # 텍스트 정리 (따옴표 문제 해결)
-    clean_speech = speech_text.replace('"', '').replace("'", "").replace('\n', ' ')
-    clean_speech = clean_speech.replace('**', '').replace('*', '').replace('[', '').replace(']', '')
-    clean_speech = clean_speech[:500]  # 길이 제한
-    
-    # HTML 정리 (따옴표 문제 해결)
-    typing_text = new_content.replace('"', '&quot;').replace("'", "&#39;")
-    typing_text = typing_text.replace('\n', '<br>').replace('`', '&#96;')
-    existing_text = existing_content.replace('"', '&quot;').replace("'", "&#39;")
-    existing_text = existing_text.replace('\n', '<br>').replace('`', '&#96;')
-    
-    # 안전한 JavaScript 코드 생성
-    typing_html = f"""
-    <div class="typing-container">
-        <div class="typing-status" id="status">
-            🎓 AI 선생님이 칠판에 쓰고 있습니다...
-        </div>
-        
-        <div class="blackboard" id="blackboard">
-            <h2>📚 AI 칠판</h2>
-            <div id="existing-content">{existing_text}</div>
-            <div id="typed-content"></div>
-            <span id="cursor" style="background: #FFD700; animation: blink 1s infinite;">|</span>
-        </div>
+    # 매우 간단한 TTS HTML
+    tts_html = f"""
+    <div style="background: #e8f5e8; padding: 15px; border-radius: 10px; margin: 10px 0;">
+        <h4>🔊 AI 선생님이 설명 중입니다...</h4>
+        <p>음성이 재생되지 않으면 브라우저에서 음성을 허용해주세요.</p>
     </div>
-
+    
     <script>
-    // 안전하게 텍스트 전달
-    const typingText = String.raw`{typing_text}`;
-    const speechText = String.raw`{clean_speech}`;
-    
-    let currentIndex = 0;
-    let typingSpeed = 100;
-    let isTyping = false;
-    let utterance = null;
-    let speechStarted = false;
-    
-    // 스타일 추가
-    if (!document.getElementById('blink-style')) {{
-        const style = document.createElement('style');
-        style.id = 'blink-style';
-        style.textContent = `
-            @keyframes blink {{
-                0%, 50% {{ opacity: 1; }}
-                51%, 100% {{ opacity: 0; }}
-            }}
-        `;
-        document.head.appendChild(style);
-    }}
-    
-    // TTS 설정
-    function setupTTS() {{
-        try {{
+    // 매우 안전한 TTS 코드
+    try {{
+        // 기존 음성 정지
+        if (typeof speechSynthesis !== 'undefined') {{
             speechSynthesis.cancel();
             
-            utterance = new SpeechSynthesisUtterance(speechText);
-            utterance.lang = 'ko-KR';
+            // 새 음성 생성
+            var utterance = new SpeechSynthesisUtterance();
+            utterance.text = "{clean_text}";
+            utterance.lang = "ko-KR";
             utterance.rate = 0.9;
             utterance.pitch = 1.0;
             utterance.volume = 0.8;
             
-            // 한국어 음성 찾기
-            const voices = speechSynthesis.getVoices();
-            const koreanVoice = voices.find(voice => 
-                voice.lang && voice.lang.includes('ko')
-            );
+            // 음성 재생
+            speechSynthesis.speak(utterance);
             
-            if (koreanVoice) {{
-                utterance.voice = koreanVoice;
-            }}
-            
-            // 이벤트 핸들러
-            utterance.onstart = function() {{
-                console.log('TTS 시작');
-                const statusEl = document.getElementById('status');
-                if (statusEl) {{
-                    statusEl.innerHTML = '🔊 음성 재생 중 + ✍️ 칠판에 쓰는 중...';
-                }}
-            }};
-            
-            utterance.onend = function() {{
-                console.log('TTS 완료');
-                const statusEl = document.getElementById('status');
-                const cursorEl = document.getElementById('cursor');
-                if (statusEl) {{
-                    statusEl.innerHTML = '✅ 완료! 칠판을 확인하세요.';
-                }}
-                if (cursorEl) {{
-                    cursorEl.style.display = 'none';
-                }}
-            }};
-            
-            utterance.onerror = function(event) {{
-                console.error('TTS 오류:', event.error);
-                const statusEl = document.getElementById('status');
-                if (statusEl) {{
-                    statusEl.innerHTML = '⚠️ 음성 재생 오류. 타이핑은 계속됩니다.';
-                }}
-            }};
-        }} catch (error) {{
-            console.error('TTS 설정 오류:', error);
-        }}
-    }}
-    
-    // 타이핑 함수
-    function typeCharacter() {{
-        try {{
-            if (currentIndex < typingText.length) {{
-                // 첫 글자에서 TTS 시작
-                if (currentIndex === 0 && !speechStarted) {{
-                    setupTTS();
-                    if (utterance) {{
-                        speechSynthesis.speak(utterance);
-                        speechStarted = true;
-                    }}
-                }}
-                
-                // 현재 문자 추가
-                const currentChar = typingText[currentIndex];
-                const typedContent = document.getElementById('typed-content');
-                
-                if (typedContent) {{
-                    if (currentChar === '<') {{
-                        // HTML 태그 처리
-                        const tagEnd = typingText.indexOf('>', currentIndex);
-                        if (tagEnd !== -1) {{
-                            typedContent.innerHTML += typingText.substring(currentIndex, tagEnd + 1);
-                            currentIndex = tagEnd + 1;
-                        }} else {{
-                            typedContent.innerHTML += currentChar;
-                            currentIndex++;
-                        }}
-                    }} else {{
-                        typedContent.innerHTML += currentChar;
-                        currentIndex++;
-                    }}
-                }}
-                
-                // 다음 문자
-                setTimeout(typeCharacter, typingSpeed);
-            }} else {{
-                // 타이핑 완료
-                isTyping = false;
-                if (!speechStarted && utterance) {{
-                    speechSynthesis.speak(utterance);
-                }}
-            }}
-        }} catch (error) {{
-            console.error('타이핑 오류:', error);
-        }}
-    }}
-    
-    // 시작 함수
-    function startAnimation() {{
-        try {{
-            isTyping = true;
-            currentIndex = 0;
-            speechStarted = false;
-            
-            setTimeout(typeCharacter, 500);
-        }} catch (error) {{
-            console.error('애니메이션 시작 오류:', error);
-        }}
-    }}
-    
-    // 음성 목록 로드 후 시작
-    try {{
-        if (speechSynthesis.getVoices().length > 0) {{
-            startAnimation();
-        }} else {{
-            speechSynthesis.onvoiceschanged = function() {{
-                startAnimation();
-            }};
+            console.log("TTS 시작됨");
         }}
     }} catch (error) {{
-        console.error('초기화 오류:', error);
-        // 오류가 있어도 타이핑은 시작
-        startAnimation();
+        console.error("TTS 오류:", error);
     }}
-    
-    // 페이지 이탈 시 정리
-    window.addEventListener('beforeunload', function() {{
-        try {{
-            speechSynthesis.cancel();
-        }} catch (error) {{
-            console.error('정리 오류:', error);
-        }}
-    }});
     </script>
     """
     
-    # Streamlit에 표시
-    st.components.v1.html(typing_html, height=600)
-    
-    # 세션에 최종 내용 저장
-    st.session_state.blackboard_content = existing_content + new_content
+    # Streamlit에 안전하게 표시
+    st.components.v1.html(tts_html, height=120)
 
 def format_response_for_blackboard(response):
     """응답을 칠판 형식으로 포맷팅"""
