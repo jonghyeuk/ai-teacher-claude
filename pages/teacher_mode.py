@@ -546,14 +546,18 @@ def update_blackboard_with_response(response):
 def create_typing_animation(existing_content, new_content, speech_text):
     """실시간 타이핑 애니메이션 + TTS 생성"""
     
-    # 텍스트 정리 (TTS용)
-    clean_speech = speech_text.replace('"', '\'').replace('\n', ' ').replace('**', '').replace('*', '')
-    clean_speech = clean_speech.replace('[', '').replace(']', '').replace('<', '').replace('>', '')
+    # 텍스트 정리 (따옴표 문제 해결)
+    clean_speech = speech_text.replace('"', '').replace("'", "").replace('\n', ' ')
+    clean_speech = clean_speech.replace('**', '').replace('*', '').replace('[', '').replace(']', '')
+    clean_speech = clean_speech[:500]  # 길이 제한
     
-    # HTML 정리 (타이핑용)
-    typing_text = new_content.replace('"', '&quot;').replace("'", "&#39;").replace('\n', '<br>')
-    existing_text = existing_content.replace('"', '&quot;').replace("'", "&#39;").replace('\n', '<br>')
+    # HTML 정리 (따옴표 문제 해결)
+    typing_text = new_content.replace('"', '&quot;').replace("'", "&#39;")
+    typing_text = typing_text.replace('\n', '<br>').replace('`', '&#96;')
+    existing_text = existing_content.replace('"', '&quot;').replace("'", "&#39;")
+    existing_text = existing_text.replace('\n', '<br>').replace('`', '&#96;')
     
+    # 안전한 JavaScript 코드 생성
     typing_html = f"""
     <div class="typing-container">
         <div class="typing-status" id="status">
@@ -569,140 +573,166 @@ def create_typing_animation(existing_content, new_content, speech_text):
     </div>
 
     <script>
-    // 전역 변수
-    let typingText = `{typing_text}`;
-    let speechText = `{clean_speech}`;
-    let currentIndex = 0;
-    let typingSpeed = 80; // 밀리초 (타이핑 속도)
-    let isTyping = false;
+    // 안전하게 텍스트 전달
+    const typingText = String.raw`{typing_text}`;
+    const speechText = String.raw`{clean_speech}`;
     
-    // TTS 설정
+    let currentIndex = 0;
+    let typingSpeed = 100;
+    let isTyping = false;
     let utterance = null;
     let speechStarted = false;
     
-    // 스타일 애니메이션
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes blink {{
-            0%, 50% {{ opacity: 1; }}
-            51%, 100% {{ opacity: 0; }}
-        }}
-    `;
-    document.head.appendChild(style);
-    
-    // TTS 설정 함수
-    function setupTTS() {{
-        speechSynthesis.cancel(); // 기존 음성 정지
-        
-        utterance = new SpeechSynthesisUtterance(speechText);
-        utterance.lang = 'ko-KR';
-        utterance.rate = 0.9;
-        utterance.pitch = 1.0;
-        utterance.volume = 0.8;
-        
-        // 한국어 음성 찾기
-        const voices = speechSynthesis.getVoices();
-        const koreanVoice = voices.find(voice => 
-            voice.lang.includes('ko') || 
-            voice.name.includes('Korean') ||
-            voice.name.includes('한국')
-        );
-        
-        if (koreanVoice) {{
-            utterance.voice = koreanVoice;
-        }}
-        
-        // TTS 이벤트 핸들러
-        utterance.onstart = function() {{
-            console.log('TTS 시작');
-            document.getElementById('status').innerHTML = 
-                '🔊 음성 재생 중 + ✍️ 칠판에 쓰는 중...';
-        }};
-        
-        utterance.onend = function() {{
-            console.log('TTS 완료');
-            document.getElementById('status').innerHTML = 
-                '✅ 완료! 칠판을 확인하세요.';
-            document.getElementById('cursor').style.display = 'none';
-        }};
-        
-        utterance.onerror = function(event) {{
-            console.error('TTS 오류:', event.error);
-            document.getElementById('status').innerHTML = 
-                '⚠️ 음성 재생 오류. 타이핑은 계속됩니다.';
-        }};
+    // 스타일 추가
+    if (!document.getElementById('blink-style')) {{
+        const style = document.createElement('style');
+        style.id = 'blink-style';
+        style.textContent = `
+            @keyframes blink {{
+                0%, 50% {{ opacity: 1; }}
+                51%, 100% {{ opacity: 0; }}
+            }}
+        `;
+        document.head.appendChild(style);
     }}
     
-    // 타이핑 애니메이션 함수
-    function typeCharacter() {{
-        if (currentIndex < typingText.length) {{
-            // TTS 시작 (첫 글자에서만)
-            if (currentIndex === 0 && !speechStarted) {{
-                setupTTS();
-                speechSynthesis.speak(utterance);
-                speechStarted = true;
+    // TTS 설정
+    function setupTTS() {{
+        try {{
+            speechSynthesis.cancel();
+            
+            utterance = new SpeechSynthesisUtterance(speechText);
+            utterance.lang = 'ko-KR';
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
+            utterance.volume = 0.8;
+            
+            // 한국어 음성 찾기
+            const voices = speechSynthesis.getVoices();
+            const koreanVoice = voices.find(voice => 
+                voice.lang && voice.lang.includes('ko')
+            );
+            
+            if (koreanVoice) {{
+                utterance.voice = koreanVoice;
             }}
             
-            // 현재 문자 추가
-            const currentChar = typingText[currentIndex];
-            const typedContent = document.getElementById('typed-content');
-            
-            if (currentChar === '<') {{
-                // HTML 태그 처리
-                let tagEnd = typingText.indexOf('>', currentIndex);
-                if (tagEnd !== -1) {{
-                    typedContent.innerHTML += typingText.substring(currentIndex, tagEnd + 1);
-                    currentIndex = tagEnd + 1;
-                }} else {{
-                    typedContent.innerHTML += currentChar;
-                    currentIndex++;
+            // 이벤트 핸들러
+            utterance.onstart = function() {{
+                console.log('TTS 시작');
+                const statusEl = document.getElementById('status');
+                if (statusEl) {{
+                    statusEl.innerHTML = '🔊 음성 재생 중 + ✍️ 칠판에 쓰는 중...';
                 }}
-            }} else {{
-                typedContent.innerHTML += currentChar;
-                currentIndex++;
-            }}
+            }};
             
-            // 다음 문자로
-            setTimeout(typeCharacter, typingSpeed);
-        }} else {{
-            // 타이핑 완료
-            isTyping = false;
-            if (!speechStarted) {{
-                // TTS가 시작되지 않았다면 지금 시작
-                setupTTS();
-                speechSynthesis.speak(utterance);
+            utterance.onend = function() {{
+                console.log('TTS 완료');
+                const statusEl = document.getElementById('status');
+                const cursorEl = document.getElementById('cursor');
+                if (statusEl) {{
+                    statusEl.innerHTML = '✅ 완료! 칠판을 확인하세요.';
+                }}
+                if (cursorEl) {{
+                    cursorEl.style.display = 'none';
+                }}
+            }};
+            
+            utterance.onerror = function(event) {{
+                console.error('TTS 오류:', event.error);
+                const statusEl = document.getElementById('status');
+                if (statusEl) {{
+                    statusEl.innerHTML = '⚠️ 음성 재생 오류. 타이핑은 계속됩니다.';
+                }}
+            }};
+        }} catch (error) {{
+            console.error('TTS 설정 오류:', error);
+        }}
+    }}
+    
+    // 타이핑 함수
+    function typeCharacter() {{
+        try {{
+            if (currentIndex < typingText.length) {{
+                // 첫 글자에서 TTS 시작
+                if (currentIndex === 0 && !speechStarted) {{
+                    setupTTS();
+                    if (utterance) {{
+                        speechSynthesis.speak(utterance);
+                        speechStarted = true;
+                    }}
+                }}
+                
+                // 현재 문자 추가
+                const currentChar = typingText[currentIndex];
+                const typedContent = document.getElementById('typed-content');
+                
+                if (typedContent) {{
+                    if (currentChar === '<') {{
+                        // HTML 태그 처리
+                        const tagEnd = typingText.indexOf('>', currentIndex);
+                        if (tagEnd !== -1) {{
+                            typedContent.innerHTML += typingText.substring(currentIndex, tagEnd + 1);
+                            currentIndex = tagEnd + 1;
+                        }} else {{
+                            typedContent.innerHTML += currentChar;
+                            currentIndex++;
+                        }}
+                    }} else {{
+                        typedContent.innerHTML += currentChar;
+                        currentIndex++;
+                    }}
+                }}
+                
+                // 다음 문자
+                setTimeout(typeCharacter, typingSpeed);
+            }} else {{
+                // 타이핑 완료
+                isTyping = false;
+                if (!speechStarted && utterance) {{
+                    speechSynthesis.speak(utterance);
+                }}
             }}
+        }} catch (error) {{
+            console.error('타이핑 오류:', error);
         }}
     }}
     
     // 시작 함수
-    function startTypingAnimation() {{
-        isTyping = true;
-        currentIndex = 0;
-        speechStarted = false;
-        
-        // 기존 내용이 있다면 표시
-        const existingDiv = document.getElementById('existing-content');
-        if (existingDiv && existingDiv.innerHTML.trim()) {{
-            // 기존 내용은 이미 표시됨
+    function startAnimation() {{
+        try {{
+            isTyping = true;
+            currentIndex = 0;
+            speechStarted = false;
+            
+            setTimeout(typeCharacter, 500);
+        }} catch (error) {{
+            console.error('애니메이션 시작 오류:', error);
         }}
-        
-        // 타이핑 시작
-        setTimeout(typeCharacter, 500); // 0.5초 후 시작
     }}
     
     // 음성 목록 로드 후 시작
-    if (speechSynthesis.getVoices().length > 0) {{
-        startTypingAnimation();
-    }} else {{
-        speechSynthesis.onvoiceschanged = function() {{
-            startTypingAnimation();
-        }};
+    try {{
+        if (speechSynthesis.getVoices().length > 0) {{
+            startAnimation();
+        }} else {{
+            speechSynthesis.onvoiceschanged = function() {{
+                startAnimation();
+            }};
+        }}
+    }} catch (error) {{
+        console.error('초기화 오류:', error);
+        // 오류가 있어도 타이핑은 시작
+        startAnimation();
     }}
     
-    // 페이지를 벗어날 때 음성 정지
+    // 페이지 이탈 시 정리
     window.addEventListener('beforeunload', function() {{
-        speechSynthesis.cancel();
+        try {{
+            speechSynthesis.cancel();
+        }} catch (error) {{
+            console.error('정리 오류:', error);
+        }}
     }});
     </script>
     """
