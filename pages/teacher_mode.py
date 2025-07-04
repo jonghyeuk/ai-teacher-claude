@@ -2,9 +2,73 @@ import streamlit as st
 import json
 import time
 from datetime import datetime
-from utils.claude_api import get_claude_response, generate_system_prompt
-from utils.voice_handler import text_to_speech, speech_to_text
 import re
+
+# Claude API 함수들 직접 정의 (import 오류 방지)
+def get_claude_response(user_message, system_prompt, chat_history):
+    """Claude API 응답 생성"""
+    try:
+        from anthropic import Anthropic
+        
+        # API 키 가져오기
+        api_key = st.secrets.get('ANTHROPIC_API_KEY')
+        if not api_key:
+            return "API 키가 설정되지 않았습니다."
+        
+        client = Anthropic(api_key=api_key)
+        
+        # 메시지 준비
+        messages = []
+        for msg in chat_history[-5:]:  # 최근 5개만
+            if msg['role'] in ['user', 'assistant']:
+                messages.append({
+                    "role": msg['role'],
+                    "content": msg['content']
+                })
+        
+        # 현재 메시지 추가
+        messages.append({
+            "role": "user",
+            "content": user_message
+        })
+        
+        # Claude API 호출
+        response = client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1000,
+            temperature=0.7,
+            system=system_prompt,
+            messages=messages
+        )
+        
+        return response.content[0].text
+        
+    except Exception as e:
+        return f"오류가 발생했습니다: {str(e)}"
+
+def generate_system_prompt(teacher_config):
+    """시스템 프롬프트 생성"""
+    personality = teacher_config.get('personality', {})
+    
+    return f"""당신은 {teacher_config['name']}이라는 이름의 AI 튜터입니다. 
+{teacher_config['subject']} 분야의 전문가이며, {teacher_config['level']} 수준의 학생들을 가르칩니다.
+
+당신의 성격:
+- 친근함: {personality.get('friendliness', 70)}/100
+- 유머: {personality.get('humor_level', 30)}/100
+- 설명 상세도: {personality.get('explanation_detail', 70)}/100
+
+학생들에게 도움이 되는 교육적인 답변을 해주세요.
+칠판에 쓸 내용이 있다면 **중요내용**으로 강조해주세요."""
+
+# 음성 함수들 간단 정의
+def text_to_speech(text, voice_settings):
+    """텍스트를 음성으로 변환 (나중에 구현)"""
+    st.info(f"🔊 음성 재생: {text[:50]}...")
+
+def speech_to_text():
+    """음성을 텍스트로 변환 (나중에 구현)"""
+    return "안녕하세요, 전자기 유도에 대해 설명해주세요"
 
 # 페이지 설정
 st.set_page_config(
@@ -277,6 +341,15 @@ def main():
                 st.session_state.is_recording = True
                 st.rerun()
         
+        # 텍스트 입력 추가 (테스트용)
+        st.subheader("💬 텍스트 입력")
+        user_text = st.text_input("질문을 입력하세요:", key="text_input", placeholder="예: 전자기 유도에 대해 설명해주세요")
+        
+        if st.button("📝 텍스트 전송", key="send_text"):
+            if user_text:
+                process_text_input(user_text)
+                st.rerun()
+        
         # 음성 설정
         st.subheader("🔊 음성 설정")
         with st.expander("설정 조절"):
@@ -323,13 +396,9 @@ def main():
             if st.button("💾 수업 내용 저장"):
                 save_lesson_content()
 
-def process_voice_input():
-    """음성 입력 처리"""
+def process_text_input(user_input):
+    """텍스트 입력 처리"""
     try:
-        # 실제로는 speech_to_text 함수 사용
-        # 여기서는 시뮬레이션
-        user_input = "안녕하세요, 전자기 유도에 대해 설명해주세요"  # 임시
-        
         if user_input:
             # 사용자 메시지 추가
             st.session_state.chat_history.append({
@@ -342,24 +411,40 @@ def process_voice_input():
             teacher = st.session_state.selected_teacher
             system_prompt = generate_system_prompt(teacher)
             
-            ai_response = get_claude_response(user_input, system_prompt, st.session_state.chat_history)
-            
-            # AI 응답 추가
-            st.session_state.chat_history.append({
-                'role': 'assistant',
-                'content': ai_response,
-                'timestamp': datetime.now()
-            })
-            
-            # 칠판에 내용 추가
-            update_blackboard_with_response(ai_response)
-            
-            # 음성 재생 (설정이 켜져있다면)
-            if teacher['voice_settings']['auto_play']:
-                text_to_speech(ai_response, teacher['voice_settings'])
+            # Claude API 호출
+            try:
+                st.info("🤔 AI가 생각하고 있습니다...")
+                ai_response = get_claude_response(user_input, system_prompt, st.session_state.chat_history)
+                
+                if ai_response:
+                    # AI 응답 추가
+                    st.session_state.chat_history.append({
+                        'role': 'assistant',
+                        'content': ai_response,
+                        'timestamp': datetime.now()
+                    })
+                    
+                    # 칠판에 내용 추가
+                    update_blackboard_with_response(ai_response)
+                    
+                    st.success("✅ AI 응답 완료!")
+                else:
+                    st.error("❌ AI 응답이 비어있습니다.")
+                    
+            except Exception as e:
+                st.error(f"❌ Claude API 호출 오류: {str(e)}")
+                # 상세 오류 정보 표시
+                st.exception(e)
                 
     except Exception as e:
-        st.error(f"음성 처리 중 오류가 발생했습니다: {str(e)}")
+        st.error(f"텍스트 처리 중 오류가 발생했습니다: {str(e)}")
+        st.exception(e)
+
+def process_voice_input():
+    """음성 입력 처리"""
+    # 음성은 나중에 구현하고, 일단 테스트 메시지로
+    test_message = "안녕하세요, 전자기 유도에 대해 설명해주세요"
+    process_text_input(test_message)
 
 def update_blackboard_with_response(response):
     """AI 응답을 칠판에 업데이트"""
