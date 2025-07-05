@@ -974,7 +974,7 @@ $$ F = ma $$
                 save_lesson_content()
 
 def process_text_input(user_input):
-    """텍스트 입력 처리 - 완전한 TTS + 애니메이션 버전"""
+    """텍스트 입력 처리 - 완전한 TTS + 애니메이션 복원"""
     try:
         if user_input:
             # 사용자 메시지 추가
@@ -1003,14 +1003,9 @@ def process_text_input(user_input):
                 # 칠판 업데이트
                 update_blackboard_with_response(ai_response)
                 
-                # 🎬 타이핑 애니메이션 먼저 시작
-                st.success("✅ AI 응답 완료! 🎬 칠판에 쓰는 중...")
-                typing_html = create_typing_animation(ai_response)
-                st.components.v1.html(typing_html, height=120)
-                
                 # 🔊 TTS 재생 (자동 재생이 켜져있으면)
                 if teacher.get('voice_settings', {}).get('auto_play', True):
-                    st.info("🔊 음성으로 설명을 들려드립니다...")
+                    st.success("✅ AI 응답 완료! 🎬 칠판 타이핑 + 음성 재생 시작...")
                     
                     # 전광판 효과가 있는 TTS 재생
                     voice_settings = {
@@ -1021,9 +1016,18 @@ def process_text_input(user_input):
                     tts_html = play_immediate_tts(ai_response, voice_settings)
                     st.components.v1.html(tts_html, height=450)
                     
-                    st.success("🎉 음성 재생이 시작되었습니다!")
+                    # 타이핑 애니메이션 효과 추가
+                    typing_html = create_typing_animation(ai_response)
+                    st.components.v1.html(typing_html, height=150)
+                    
                 else:
                     st.success("✅ AI 응답 완료! (음성 재생 꺼짐)")
+                    # 음성 없어도 타이핑 효과는 보여주기
+                    typing_html = create_typing_animation(ai_response)
+                    st.components.v1.html(typing_html, height=150)
+                
+                # 페이지 새로고침으로 칠판 업데이트 (중요!)
+                st.rerun()
                 
             else:
                 st.error(f"❌ AI 응답 오류: {ai_response}")
