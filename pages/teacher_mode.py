@@ -205,7 +205,7 @@ def create_typing_blackboard_system(text, voice_settings=None):
             <!-- 타이핑 커서 -->
             <span id="typing-cursor" style="color: #FFD700; font-size: 20px; animation: cursor-blink 1s infinite; display: none;">|</span>
         </div>
-    </div>
+    </div>"""
     
     <style>
     @keyframes eq-bounce {{
