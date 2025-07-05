@@ -433,51 +433,127 @@ def play_immediate_tts(text, voice_settings=None):
     
     return tts_html
 
-# 타이핑 애니메이션 함수 복원
+# 🔊 향상된 타이핑 애니메이션 - 더 생생한 효과
 def create_typing_animation(response):
-    """타이핑 애니메이션 HTML 생성 - 완전 복원"""
+    """향상된 타이핑 애니메이션 HTML 생성"""
     # 텍스트 정리
     clean_text = response.replace('"', '').replace("'", '').replace('\n', ' ')[:200]
     safe_text = clean_text.replace("'", "\\'").replace('"', '\\"')
     
     typing_html = f"""
-    <div style="background: #e8f5e8; padding: 15px; border-radius: 10px; margin: 10px 0;">
-        <h4>🎓 AI 튜터가 칠판에 쓰고 있습니다...</h4>
-        <div id="typing-status">타이핑 중...</div>
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin: 15px 0; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.3);">
+        <h3>✍️ AI 선생님이 칠판에 쓰고 있습니다...</h3>
+        <div id="typing-status" style="font-size: 18px; margin: 15px 0;">준비 중...</div>
+        
+        <!-- 타이핑 진행바 -->
+        <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 8px; margin: 20px 0; overflow: hidden;">
+            <div id="progress-bar" style="background: #FFD700; height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 10px;"></div>
+        </div>
+        
+        <!-- 타이핑 사운드 시각화 -->
+        <div id="typing-visual" style="display: flex; justify-content: center; align-items: center; height: 40px; margin: 15px 0;">
+            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both;"></div>
+            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></div>
+            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></div>
+        </div>
+        
+        <div id="text-preview" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px; opacity: 0.8;">
+            "{clean_text[:100]}{'...' if len(clean_text) > 100 else ''}"
+        </div>
     </div>
     
-    <script>
-    // 타이핑 애니메이션 시뮬레이션
-    let dots = '';
-    let counter = 0;
-    const maxDots = 3;
-    const typingSpeed = 300; // 밀리초
-    
-    function animateTyping() {{
-        counter++;
-        dots += '.';
-        if (dots.length > maxDots) {{
-            dots = '';
-        }}
-        
-        const statusElement = document.getElementById('typing-status');
-        if (statusElement) {{
-            statusElement.innerHTML = '✍️ 칠판에 쓰는 중' + dots;
-        }}
-        
-        // 3초 후에 완료 메시지
-        if (counter >= 10) {{
-            if (statusElement) {{
-                statusElement.innerHTML = '✅ 완료! 칠판을 확인하세요.';
-            }}
-            return;
-        }}
-        
-        setTimeout(animateTyping, typingSpeed);
+    <style>
+    @keyframes typing-bounce {{
+        0%, 80%, 100% {{ transform: scale(0); }}
+        40% {{ transform: scale(1); }}
     }}
     
+    @keyframes pulse-glow {{
+        0% {{ box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }}
+        50% {{ box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }}
+        100% {{ box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }}
+    }}
+    </style>
+    
+    <script>
+    let typingProgress = 0;
+    let typingInterval;
+    let isTypingComplete = false;
+    
+    function startTypingAnimation() {{
+        const statusElement = document.getElementById('typing-status');
+        const progressBar = document.getElementById('progress-bar');
+        
+        const messages = [
+            '🖊️ 칠판에 제목을 쓰는 중...',
+            '📐 수식을 정리하는 중...',
+            '🎨 중요한 부분을 강조하는 중...',
+            '📝 예시를 추가하는 중...',
+            '✅ 칠판 작성 완료!'
+        ];
+        
+        let messageIndex = 0;
+        let progress = 0;
+        
+        typingInterval = setInterval(() => {{
+            progress += 2;
+            
+            if (progressBar) {{
+                progressBar.style.width = progress + '%';
+            }}
+            
+            // 메시지 변경
+            if (progress > messageIndex * 20 && messageIndex < messages.length - 1) {{
+                messageIndex++;
+                if (statusElement) {{
+                    statusElement.textContent = messages[messageIndex];
+                }}
+            }}
+            
+            // 완료 처리
+            if (progress >= 100) {{
+                clearInterval(typingInterval);
+                isTypingComplete = true;
+                
+                if (statusElement) {{
+                    statusElement.innerHTML = '✅ 완료! 이제 음성으로 설명을 들어보세요 🔊';
+                    statusElement.style.color = '#90EE90';
+                    statusElement.style.fontWeight = 'bold';
+                }}
+                
+                // 타이핑 도트 숨기기
+                const typingVisual = document.getElementById('typing-visual');
+                if (typingVisual) {{
+                    typingVisual.style.display = 'none';
+                }}
+                
+                console.log('타이핑 애니메이션 완료');
+            }}
+        }}, 150); // 150ms 간격으로 업데이트
+        
+        console.log('타이핑 애니메이션 시작');
+    }}
+    
+    // 3초 후 완료 (음성 재생 시작 신호)
+    setTimeout(() => {{
+        if (!isTypingComplete) {{
+            clearInterval(typingInterval);
+            const statusElement = document.getElementById('typing-status');
+            const progressBar = document.getElementById('progress-bar');
+            
+            if (progressBar) progressBar.style.width = '100%';
+            if (statusElement) {{
+                statusElement.innerHTML = '✅ 완료! 이제 음성으로 설명을 들어보세요 🔊';
+                statusElement.style.color = '#90EE90';
+                statusElement.style.fontWeight = 'bold';
+            }}
+            
+            isTypingComplete = true;
+        }}
+    }}, 3000);
+    
     // 애니메이션 시작
-    setTimeout(animateTyping, 500);
+    setTimeout(startTypingAnimation, 500);
     </script>
     """
     
@@ -511,14 +587,33 @@ st.markdown("""
         font-family: 'Georgia', serif;
         font-size: 18px;
         line-height: 1.8;
-        min-height: 400px;
+        height: 500px;  /* 고정 높이 */
         border: 8px solid #8B4513;
         box-shadow: 
             inset 0 0 30px rgba(0,0,0,0.3),
             0 10px 20px rgba(0,0,0,0.2);
-        overflow-y: auto;
+        overflow-y: auto;  /* 세로 스크롤 활성화 */
         white-space: pre-wrap;
         position: relative;
+        scroll-behavior: smooth;  /* 부드러운 스크롤 */
+    }
+    
+    .blackboard::-webkit-scrollbar {
+        width: 12px;
+    }
+    
+    .blackboard::-webkit-scrollbar-track {
+        background: rgba(139, 69, 19, 0.3);
+        border-radius: 6px;
+    }
+    
+    .blackboard::-webkit-scrollbar-thumb {
+        background: rgba(255, 215, 0, 0.6);
+        border-radius: 6px;
+    }
+    
+    .blackboard::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 215, 0, 0.8);
     }
     
     .blackboard::before {
@@ -879,7 +974,7 @@ $$ F = ma $$
                 save_lesson_content()
 
 def process_text_input(user_input):
-    """텍스트 입력 처리 - 안전한 방식"""
+    """텍스트 입력 처리 - 완전한 TTS + 애니메이션 복원"""
     try:
         if user_input:
             # 사용자 메시지 추가
@@ -894,55 +989,51 @@ def process_text_input(user_input):
             system_prompt = generate_system_prompt(teacher)
             
             # Claude API 호출
-            try:
-                st.info("🤔 AI가 생각하고 있습니다...")
+            with st.spinner("🤔 AI가 생각하고 있습니다..."):
                 ai_response = get_claude_response(user_input, system_prompt, st.session_state.chat_history)
+            
+            if ai_response and "오류가 발생했습니다" not in ai_response:
+                # AI 응답 추가
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': ai_response,
+                    'timestamp': datetime.now()
+                })
                 
-                if ai_response:
-                    # AI 응답 추가
-                    st.session_state.chat_history.append({
-                        'role': 'assistant',
-                        'content': ai_response,
-                        'timestamp': datetime.now()
-                    })
+                # 칠판 업데이트
+                update_blackboard_with_response(ai_response)
+                
+                # 🔊 TTS 재생 (자동 재생이 켜져있으면)
+                if teacher.get('voice_settings', {}).get('auto_play', True):
+                    st.success("✅ AI 응답 완료! 🎬 칠판 타이핑 + 음성 재생 시작...")
                     
-                    # ✅ 안전한 칠판 업데이트 + TTS
-                    if teacher.get('voice_settings', {}).get('auto_play', True):
-                        st.success("✅ AI 응답 완료! 🔊 음성으로 읽어드립니다...")
-                        update_blackboard_with_response(ai_response)
-                        
-                        # 전광판 효과가 있는 TTS 재생
-                        voice_settings = {
-                            'speed': teacher.get('voice_settings', {}).get('speed', 1.0),
-                            'pitch': teacher.get('voice_settings', {}).get('pitch', 1.0)
-                        }
-                        
-                        tts_html = play_immediate_tts(ai_response, voice_settings)
-                        st.components.v1.html(tts_html, height=400)
-                    else:
-                        # 음성 없이 칠판만 업데이트
-                        blackboard_text = format_response_for_blackboard(ai_response)
-                        if st.session_state.blackboard_content:
-                            st.session_state.blackboard_content += f"\n\n{'='*50}\n\n{blackboard_text}"
-                        else:
-                            st.session_state.blackboard_content = blackboard_text
-                        st.success("✅ AI 응답 완료! (음성 재생 꺼짐)")
-                        
-                    # 타이핑 애니메이션 효과
+                    # 전광판 효과가 있는 TTS 재생
+                    voice_settings = {
+                        'speed': teacher.get('voice_settings', {}).get('speed', 1.0),
+                        'pitch': teacher.get('voice_settings', {}).get('pitch', 1.0)
+                    }
+                    
+                    tts_html = play_immediate_tts(ai_response, voice_settings)
+                    st.components.v1.html(tts_html, height=450)
+                    
+                    # 타이핑 애니메이션 효과 추가
                     typing_html = create_typing_animation(ai_response)
-                    st.components.v1.html(typing_html, height=100)
-                        
-                    # 페이지 자동 새로고침으로 칠판 업데이트
-                    st.rerun()
-                else:
-                    st.error("❌ AI 응답이 비어있습니다.")
+                    st.components.v1.html(typing_html, height=150)
                     
-            except Exception as e:
-                st.error(f"❌ Claude API 호출 오류: {str(e)}")
-                st.exception(e)
+                else:
+                    st.success("✅ AI 응답 완료! (음성 재생 꺼짐)")
+                    # 음성 없어도 타이핑 효과는 보여주기
+                    typing_html = create_typing_animation(ai_response)
+                    st.components.v1.html(typing_html, height=150)
+                
+                # 페이지 새로고침으로 칠판 업데이트 (중요!)
+                st.rerun()
+                
+            else:
+                st.error(f"❌ AI 응답 오류: {ai_response}")
                 
     except Exception as e:
-        st.error(f"텍스트 처리 중 오류가 발생했습니다: {str(e)}")
+        st.error(f"처리 중 오류: {str(e)}")
         st.exception(e)
 
 def process_voice_input():
