@@ -77,136 +77,129 @@ def generate_system_prompt(teacher_config):
 - 친근함: {personality.get('friendliness', 70)}/100
 - 유머 수준: {personality.get('humor_level', 30)}/100
 - 격려 수준: {personality.get('encouragement', 80)}/100
-- 설명 상세도: {personality.get('explanation_detail', 70)}/100
-- 상호작용 빈도: {personality.get('interaction_frequency', 60)}/100
-- 이론-실습 균형: {personality.get('theory_vs_practice', 50)}/100 (0=이론중심, 100=실습중심)
-- 안전 강조: {personality.get('safety_emphasis', 90)}/100
-- 적응성: {personality.get('adaptability', 75)}/100
-- 응답 속도: {personality.get('response_speed', 60)}/100
-- 어휘 수준: {personality.get('vocabulary_level', 50)}/100
 
 {natural_speech_instruction}
 
-🔥 **매우 중요: 칠판 적극 활용 지침** 🔥
-당신은 반드시 칠판을 적극적으로 사용해야 합니다! 다음 규칙을 엄격히 따르세요:
+🎯 **칠판 사용 지침 (매우 중요!)** 
+칠판에는 반드시 다음 형식으로 써주세요:
 
-1. **핵심 개념/정의**: **핵심개념** 형태로 반드시 강조
-2. **수식/공식**: $E=mc^2$, $F=ma$ 처럼 반드시 수식 표기 
-3. **중요 단어**: [RED]매우중요[/RED], [BLUE]기억하세요[/BLUE], [GREEN]핵심포인트[/GREEN]
-4. **단계별 설명**: 1단계, 2단계, 3단계로 구조화
-5. **예시/결과**: → 결과: 이렇게 됩니다 (화살표 사용)
+1. **제목**: ## 주제명
+2. **정의**: **개념 = 설명**  
+3. **공식**: F = ma
+4. **중요사항**: <RED>중요한 내용</RED>
+5. **보충설명**: <BLUE>추가 정보</BLUE>
+6. **강조**: <U>밑줄 강조</U>
 
-반드시 포함해야 할 칠판 요소:
-- 제목: ## 오늘의 주제
-- 정의: **중요개념 = 설명**
-- 공식: $공식$ 
-- 강조: [RED]주의사항[/RED]
-- 예시: → 예: 구체적 사례
-- 정리: [BLUE]**정리: 핵심 내용**[/BLUE]
+색상은 흰색(기본), 빨간색, 파란색, 밑줄만 사용하세요.
+복잡한 색상이나 이모지는 사용하지 마세요.
 
-말로만 설명하지 말고, 학생이 칠판을 보면서 이해할 수 있도록 시각적으로 정리해주세요!
-
-학생들에게 도움이 되는 교육적이고 참여도 높은 답변을 해주세요."""
+학생이 이해하기 쉽게 단계별로 차근차근 설명해주세요."""
 
 def format_blackboard_text(text):
-    """칠판에 표시할 텍스트 포맷팅 - 강화된 버전"""
-    # 수식 감지 및 포맷팅 (더 다양한 패턴)
-    text = re.sub(r'\$\$([^$]+)\$\$', r'<div class="formula" style="font-size: 24px; margin: 20px 0;">\1</div>', text)
-    text = re.sub(r'\$([^$]+)\$', r'<div class="formula">\1</div>', text)
+    """칠판 텍스트 포맷팅 - 단순한 색상만"""
+    # 제목 포맷팅
+    text = re.sub(r'##\s*([^#\n]+)', r'<h2 class="title">\1</h2>', text)
     
-    # 중요한 단어 강조 (대문자나 **로 감싸진 텍스트)
-    text = re.sub(r'\*\*([^*]+)\*\*', r'<span class="important">\1</span>', text)
+    # 색상 태그 변환 (단순화)
+    text = re.sub(r'<RED>([^<]+)</RED>', r'<span class="red">\1</span>', text)
+    text = re.sub(r'<BLUE>([^<]+)</BLUE>', r'<span class="blue">\1</span>', text)
+    text = re.sub(r'<U>([^<]+)</U>', r'<span class="underline">\1</span>', text)
     
-    # 색상 태그 변환
-    text = re.sub(r'\[RED\]([^[]+)\[/RED\]', r'<span class="highlight-red">\1</span>', text)
-    text = re.sub(r'\[BLUE\]([^[]+)\[/BLUE\]', r'<span class="highlight-blue">\1</span>', text)
-    text = re.sub(r'\[GREEN\]([^[]+)\[/GREEN\]', r'<span class="highlight-green">\1</span>', text)
+    # 강조 텍스트
+    text = re.sub(r'\*\*([^*]+)\*\*', r'<span class="bold">\1</span>', text)
     
-    # 원 표시 (중요한 부분)
-    text = re.sub(r'\[CIRCLE\]([^[]+)\[/CIRCLE\]', r'<span class="circle">\1</span>', text)
-    
-    # 이모지와 구조 요소들 강화
-    text = re.sub(r'##\s*([^#\n]+)', r'<h2 style="color: #FFD700; text-align: center; margin: 20px 0; border-bottom: 2px solid #FFD700; padding-bottom: 10px;">\1</h2>', text)
-    text = re.sub(r'🔹\s*([^\n]+)', r'<div style="background: rgba(255,215,0,0.2); padding: 10px; border-left: 4px solid #FFD700; margin: 10px 0;">\1</div>', text)
-    text = re.sub(r'💡\s*([^\n]+)', r'<div style="background: rgba(255,107,107,0.2); padding: 10px; border-left: 4px solid #FF6B6B; margin: 10px 0;">💡 \1</div>', text)
-    text = re.sub(r'📋\s*([^\n]+)', r'<div style="background: rgba(81,207,102,0.2); padding: 10px; border-left: 4px solid #51CF66; margin: 10px 0;">📋 \1</div>', text)
+    # 공식 감지
+    if re.search(r'[A-Za-z]\s*=\s*[A-Za-z0-9]', text):
+        text = re.sub(r'([A-Za-z]\s*=\s*[^<\n]+)', r'<div class="formula">\1</div>', text)
     
     return text
 
-# 🔊 완전한 전광판 TTS 함수 복원 (문법 오류 안전 수정)
-def play_immediate_tts(text, voice_settings=None):
-    """확실히 작동하는 TTS with 전광판 효과 - 완전 복원 버전"""
+# 🎬 완전한 칠판 타이핑 + TTS 시스템
+def create_typing_blackboard_system(text, voice_settings=None):
+    """칠판 타이핑 + 음성 재생 통합 시스템"""
     if voice_settings is None:
         voice_settings = {'speed': 1.0, 'pitch': 1.0}
     
-    # 텍스트 정리 (길이 제한 + 특수문자 제거)
+    # 텍스트 정리
     clean_text = text.replace('\n', ' ').replace('"', '').replace("'", '')
-    clean_text = re.sub(r'\[.*?\]', '', clean_text)  # [RED] 같은 태그 제거
-    clean_text = clean_text.replace('**', '').replace('*', '')[:400]  # 400자 제한
+    clean_text = re.sub(r'<[^>]+>', '', clean_text)  # HTML 태그 제거
+    clean_text = clean_text.replace('**', '').replace('*', '')[:500]  # 500자 제한
+    
+    # 안전한 텍스트 처리
+    safe_text = clean_text.replace("'", "\\'").replace('"', '\\"')
+    safe_display_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n')
     
     speed = voice_settings.get('speed', 1.0)
     pitch = voice_settings.get('pitch', 1.0)
     
-    # 안전한 텍스트 처리 (따옴표 이스케이프)
-    safe_text = clean_text.replace("'", "\\'").replace('"', '\\"')
-    
-    # 전광판 효과가 있는 TTS HTML (문법 오류 수정)
-    tts_html = f"""
-    <div id="tts-container" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin: 20px 0; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+    html_system = f"""
+    <div id="typing-tts-system" style="width: 100%; background: #1a1a1a; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
         
-        <!-- 전광판 헤더 -->
-        <div id="led-display" style="background: #000; color: #00ff00; padding: 15px; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 18px; margin-bottom: 20px; border: 3px solid #333; box-shadow: inset 0 0 10px rgba(0,255,0,0.3);">
-            <div id="led-text">🔊 AI 선생님 준비 중...</div>
-        </div>
-        
-        <!-- 음성 파형 애니메이션 -->
-        <div id="voice-wave" style="display: none; margin: 20px 0;">
-            <div style="display: flex; justify-content: center; align-items: center; height: 60px;">
-                <div class="wave-bar" style="width: 4px; height: 10px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out;"></div>
-                <div class="wave-bar" style="width: 4px; height: 20px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.1s;"></div>
-                <div class="wave-bar" style="width: 4px; height: 30px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.2s;"></div>
-                <div class="wave-bar" style="width: 4px; height: 25px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.3s;"></div>
-                <div class="wave-bar" style="width: 4px; height: 40px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.4s;"></div>
-                <div class="wave-bar" style="width: 4px; height: 15px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.5s;"></div>
-                <div class="wave-bar" style="width: 4px; height: 35px; background: #00ff00; margin: 0 2px; animation: wave 1s infinite ease-in-out 0.6s;"></div>
+        <!-- 🔊 TTS 컨트롤 패널 -->
+        <div id="tts-panel" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+            
+            <!-- LED 디스플레이 -->
+            <div id="led-display" style="background: #000; color: #00ff00; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 16px; margin-bottom: 15px; border: 2px solid #333;">
+                <div id="led-text">🎤 AI 선생님 준비 중...</div>
             </div>
-        </div>
-        
-        <!-- 컨트롤 버튼들 -->
-        <div style="margin: 20px 0;">
-            <button onclick="playVoiceNow()" id="play-btn" style="padding: 15px 30px; background: #4CAF50; color: white; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; margin: 10px; box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4); font-size: 16px;">
-                🔊 음성 재생
-            </button>
             
-            <button onclick="stopVoiceNow()" id="stop-btn" style="padding: 15px 30px; background: #f44336; color: white; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; margin: 10px; box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4); font-size: 16px;">
-                🛑 정지
-            </button>
+            <!-- 이퀄라이저 (음성 파형) -->
+            <div id="equalizer" style="display: none; margin: 15px 0; height: 60px; display: flex; justify-content: center; align-items: end;">
+                <div class="eq-bar" style="width: 6px; height: 10px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite;"></div>
+                <div class="eq-bar" style="width: 6px; height: 25px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.1s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 35px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.2s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 20px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.3s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 40px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.4s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 15px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.5s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 30px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.6s;"></div>
+                <div class="eq-bar" style="width: 6px; height: 45px; background: #00ff00; margin: 0 2px; border-radius: 3px; animation: eq-bounce 0.6s ease-in-out infinite 0.7s;"></div>
+            </div>
             
-            <button onclick="replayVoice()" id="replay-btn" style="padding: 15px 30px; background: #ff9800; color: white; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; margin: 10px; box-shadow: 0 5px 15px rgba(255, 152, 0, 0.4); font-size: 16px;">
-                🔄 다시 듣기
-            </button>
+            <!-- 컨트롤 버튼 -->
+            <div style="margin: 15px 0;">
+                <button onclick="startTeaching()" id="start-btn" style="padding: 12px 25px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 5px; font-size: 14px;">
+                    🎬 수업 시작
+                </button>
+                <button onclick="stopTeaching()" id="stop-btn" style="padding: 12px 25px; background: #f44336; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 5px; font-size: 14px;">
+                    🛑 정지
+                </button>
+                <button onclick="replayTeaching()" id="replay-btn" style="padding: 12px 25px; background: #ff9800; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 5px; font-size: 14px;">
+                    🔄 다시보기
+                </button>
+            </div>
+            
+            <div id="voice-status" style="font-size: 12px; opacity: 0.9;">시스템 준비 중...</div>
         </div>
         
-        <!-- 상태 정보 -->
-        <div id="voice-status" style="margin-top: 15px; font-size: 14px; opacity: 0.9;">
-            시스템 준비 중...
-        </div>
-        
-        <!-- 텍스트 미리보기 -->
-        <div id="text-preview" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 14px; max-height: 100px; overflow-y: auto;">
-            "{clean_text[:150]}{'...' if len(clean_text) > 150 else ''}"
+        <!-- 📝 칠판 영역 -->
+        <div id="blackboard-container" style="background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%); border: 8px solid #8B4513; border-radius: 15px; padding: 30px; min-height: 600px; max-height: 600px; overflow-y: auto; position: relative;">
+            
+            <!-- 칠판 제목 -->
+            <div style="text-align: center; color: #FFD700; font-size: 24px; font-weight: bold; margin-bottom: 30px; border-bottom: 2px solid #FFD700; padding-bottom: 10px;">
+                📚 AI 튜터 칠판
+            </div>
+            
+            <!-- 타이핑되는 내용 -->
+            <div id="blackboard-content" style="color: white; font-size: 18px; line-height: 1.8; font-family: 'Georgia', serif;">
+                <div style="text-align: center; color: #ccc; margin-top: 100px;">
+                    수업을 시작하려면 "🎬 수업 시작" 버튼을 눌러주세요
+                </div>
+            </div>
+            
+            <!-- 타이핑 커서 -->
+            <span id="typing-cursor" style="color: #FFD700; font-size: 20px; animation: cursor-blink 1s infinite; display: none;">|</span>
         </div>
     </div>
     
     <style>
-    @keyframes wave {{
-        0%, 40%, 100% {{ transform: scaleY(0.4); }}
-        20% {{ transform: scaleY(1.0); }}
+    @keyframes eq-bounce {{
+        0%, 100% {{ height: 10px; }}
+        50% {{ height: 40px; }}
     }}
     
-    @keyframes blink {{
+    @keyframes cursor-blink {{
         0%, 50% {{ opacity: 1; }}
-        51%, 100% {{ opacity: 0.3; }}
+        51%, 100% {{ opacity: 0; }}
     }}
     
     @keyframes led-scroll {{
@@ -214,34 +207,76 @@ def play_immediate_tts(text, voice_settings=None):
         100% {{ transform: translateX(-100%); }}
     }}
     
-    .led-scrolling {{
-        animation: led-scroll 10s linear infinite;
+    .title {{
+        color: #FFD700 !important;
+        text-decoration: underline;
+        font-size: 22px;
+        font-weight: bold;
+        margin: 20px 0;
+        display: block;
     }}
     
-    .voice-active {{
-        animation: blink 0.8s infinite;
+    .red {{
+        color: #FF6B6B !important;
+        font-weight: bold;
+    }}
+    
+    .blue {{
+        color: #4DABF7 !important;
+        font-weight: bold;
+    }}
+    
+    .underline {{
+        text-decoration: underline;
+        font-weight: bold;
+    }}
+    
+    .bold {{
+        font-weight: bold;
+        color: #FFD700;
+    }}
+    
+    .formula {{
+        background: rgba(65, 105, 225, 0.3);
+        color: white;
+        padding: 10px;
+        border-radius: 8px;
+        border-left: 4px solid #FFD700;
+        margin: 15px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 20px;
+        text-align: center;
+    }}
+    
+    #blackboard-container::-webkit-scrollbar {{
+        width: 12px;
+    }}
+    
+    #blackboard-container::-webkit-scrollbar-track {{
+        background: rgba(139, 69, 19, 0.3);
+        border-radius: 6px;
+    }}
+    
+    #blackboard-container::-webkit-scrollbar-thumb {{
+        background: rgba(255, 215, 0, 0.6);
+        border-radius: 6px;
     }}
     </style>
     
     <script>
     // 전역 변수
+    let isTeaching = false;
+    let typingInterval = null;
     let ttsUtterance = null;
-    let isVoicePlaying = false;
+    let currentText = "{safe_display_text}";
     let voiceSpeed = {speed};
     let voicePitch = {pitch};
-    let fullText = "{safe_text}";
+    let speechText = "{safe_text}";
     
-    // LED 디스플레이 업데이트
-    function updateLED(message, isScrolling) {{
-        const ledText = document.getElementById('led-text');
-        if (ledText) {{
-            ledText.textContent = message;
-            if (isScrolling) {{
-                ledText.classList.add('led-scrolling');
-            }} else {{
-                ledText.classList.remove('led-scrolling');
-            }}
-        }}
+    // LED 업데이트
+    function updateLED(message) {{
+        const led = document.getElementById('led-text');
+        if (led) led.textContent = message;
     }}
     
     // 상태 업데이트
@@ -250,314 +285,217 @@ def play_immediate_tts(text, voice_settings=None):
         if (status) status.textContent = message;
     }}
     
-    // 음성 파형 표시/숨김
-    function toggleWave(show) {{
-        const wave = document.getElementById('voice-wave');
-        if (wave) {{
-            wave.style.display = show ? 'block' : 'none';
-        }}
+    // 이퀄라이저 표시/숨김
+    function toggleEqualizer(show) {{
+        const eq = document.getElementById('equalizer');
+        if (eq) eq.style.display = show ? 'flex' : 'none';
     }}
     
-    // 컨테이너 효과
-    function setContainerEffect(effect) {{
-        const container = document.getElementById('tts-container');
+    // 칠판 자동 스크롤
+    function scrollToBottom() {{
+        const container = document.getElementById('blackboard-container');
         if (container) {{
-            if (effect) {{
-                container.classList.add('voice-active');
-            }} else {{
-                container.classList.remove('voice-active');
-            }}
+            container.scrollTop = container.scrollHeight;
         }}
     }}
     
-    // 음성 재생 함수
-    function playVoiceNow() {{
+    // 타이핑 효과
+    function startTyping() {{
+        const content = document.getElementById('blackboard-content');
+        const cursor = document.getElementById('typing-cursor');
+        
+        if (!content || !cursor) return;
+        
+        content.innerHTML = '';
+        cursor.style.display = 'inline';
+        
+        let index = 0;
+        const formattedText = formatBlackboardText(currentText);
+        
+        updateLED('✍️ 칠판에 쓰는 중...');
+        updateStatus('타이핑 중...');
+        
+        typingInterval = setInterval(() => {{
+            if (index < formattedText.length) {{
+                content.innerHTML = formattedText.substring(0, index + 1);
+                index++;
+                
+                // 주기적으로 스크롤
+                if (index % 20 === 0) {{
+                    scrollToBottom();
+                }}
+            }} else {{
+                clearInterval(typingInterval);
+                cursor.style.display = 'none';
+                updateLED('✅ 칠판 작성 완료');
+                updateStatus('타이핑 완료! 음성 재생 중...');
+                scrollToBottom();
+                
+                // 타이핑 완료 후 음성 시작
+                setTimeout(startVoice, 500);
+            }}
+        }}, 50); // 50ms 간격으로 타이핑
+    }}
+    
+    // 칠판 텍스트 포맷팅
+    function formatBlackboardText(text) {{
+        // 제목 포맷팅
+        text = text.replace(/##\\s*([^#\\n]+)/g, '<h2 class="title">$1</h2>');
+        
+        // 색상 태그
+        text = text.replace(/<RED>([^<]+)<\\/RED>/g, '<span class="red">$1</span>');
+        text = text.replace(/<BLUE>([^<]+)<\\/BLUE>/g, '<span class="blue">$1</span>');
+        text = text.replace(/<U>([^<]+)<\\/U>/g, '<span class="underline">$1</span>');
+        
+        // 강조
+        text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<span class="bold">$1</span>');
+        
+        // 공식
+        text = text.replace(/([A-Za-z]\\s*=\\s*[^<\\n]+)/g, '<div class="formula">$1</div>');
+        
+        // 줄바꿈
+        text = text.replace(/\\n/g, '<br>');
+        
+        return text;
+    }}
+    
+    // 음성 재생
+    function startVoice() {{
         try {{
-            console.log('TTS 재생 시작:', fullText.substring(0, 50));
-            
             // 기존 음성 정지
             speechSynthesis.cancel();
-            isVoicePlaying = false;
             
-            // LED 업데이트
-            updateLED('🔊 음성 재생 시작...', true);
-            updateStatus('음성 엔진 초기화 중...');
+            updateLED('🎤 AI 선생님이 설명하는 중...');
+            updateStatus('음성 재생 중...');
+            toggleEqualizer(true);
             
             // 새 음성 생성
-            ttsUtterance = new SpeechSynthesisUtterance(fullText);
-            
-            // 음성 설정
+            ttsUtterance = new SpeechSynthesisUtterance(speechText);
             ttsUtterance.lang = 'ko-KR';
             ttsUtterance.rate = voiceSpeed;
             ttsUtterance.pitch = voicePitch;
             ttsUtterance.volume = 1.0;
             
+            // 한국어 음성 찾기
+            const voices = speechSynthesis.getVoices();
+            const koreanVoice = voices.find(voice => 
+                voice.lang && voice.lang.toLowerCase().includes('ko')
+            );
+            if (koreanVoice) {{
+                ttsUtterance.voice = koreanVoice;
+            }}
+            
             // 이벤트 핸들러
             ttsUtterance.onstart = function() {{
-                isVoicePlaying = true;
-                updateLED('🎤 AI 선생님이 말하고 있습니다...', false);
-                updateStatus('🔊 재생 중... (속도: ' + Math.round(voiceSpeed * 100) + '%)');
-                toggleWave(true);
-                setContainerEffect(true);
-                
-                // 버튼 상태 변경
-                const playBtn = document.getElementById('play-btn');
-                if (playBtn) {{
-                    playBtn.textContent = '🔊 재생 중...';
-                    playBtn.style.background = '#FFC107';
-                }}
-                
-                console.log('TTS 재생 시작됨');
+                console.log('음성 재생 시작');
+                updateStatus('🔊 음성 재생 중... (속도: ' + Math.round(voiceSpeed * 100) + '%)');
             }};
             
             ttsUtterance.onend = function() {{
-                isVoicePlaying = false;
-                updateLED('✅ 음성 재생 완료!', false);
-                updateStatus('재생 완료! 다시 들으시려면 "다시 듣기"를 눌러주세요.');
-                toggleWave(false);
-                setContainerEffect(false);
-                
-                // 버튼 상태 복원
-                const playBtn = document.getElementById('play-btn');
-                if (playBtn) {{
-                    playBtn.textContent = '🔊 음성 재생';
-                    playBtn.style.background = '#4CAF50';
-                }}
-                
-                console.log('TTS 재생 완료');
+                updateLED('✅ 수업 완료!');
+                updateStatus('수업이 끝났습니다. 다시 보시려면 "다시보기"를 눌러주세요.');
+                toggleEqualizer(false);
+                isTeaching = false;
+                console.log('음성 재생 완료');
             }};
             
             ttsUtterance.onerror = function(event) {{
-                isVoicePlaying = false;
-                updateLED('❌ 음성 재생 오류', false);
-                updateStatus('오류: ' + event.error + ' - 다시 시도해주세요.');
-                toggleWave(false);
-                setContainerEffect(false);
-                console.error('TTS 오류:', event.error, event);
+                updateLED('❌ 음성 오류');
+                updateStatus('음성 재생 중 오류가 발생했습니다: ' + event.error);
+                toggleEqualizer(false);
+                isTeaching = false;
+                console.error('TTS 오류:', event.error);
             }};
-            
-            // 한국어 음성 찾기 및 설정
-            const voices = speechSynthesis.getVoices();
-            console.log('사용 가능한 음성 수:', voices.length);
-            
-            const koreanVoices = voices.filter(voice => 
-                voice.lang && (
-                    voice.lang.toLowerCase().includes('ko') || 
-                    voice.name.toLowerCase().includes('korean') ||
-                    voice.name.includes('한국')
-                )
-            );
-            
-            if (koreanVoices.length > 0) {{
-                ttsUtterance.voice = koreanVoices[0];
-                updateStatus('🎯 한국어 음성: ' + koreanVoices[0].name);
-                console.log('한국어 음성 사용:', koreanVoices[0].name);
-            }} else {{
-                updateStatus('⚠️ 기본 음성 사용 (한국어 음성 없음)');
-                console.log('한국어 음성 없음');
-            }}
             
             // 음성 재생
             speechSynthesis.speak(ttsUtterance);
             
         }} catch (error) {{
-            updateLED('❌ JavaScript 오류', false);
+            updateLED('❌ 시스템 오류');
             updateStatus('오류: ' + error.message);
-            console.error('TTS JavaScript 오류:', error);
+            toggleEqualizer(false);
+            console.error('음성 시스템 오류:', error);
         }}
     }}
     
-    // 음성 정지
-    function stopVoiceNow() {{
-        speechSynthesis.cancel();
-        isVoicePlaying = false;
-        updateLED('🛑 음성 재생 정지됨', false);
-        updateStatus('재생이 정지되었습니다.');
-        toggleWave(false);
-        setContainerEffect(false);
+    // 수업 시작
+    function startTeaching() {{
+        if (isTeaching) return;
         
-        const playBtn = document.getElementById('play-btn');
-        if (playBtn) {{
-            playBtn.textContent = '🔊 음성 재생';
-            playBtn.style.background = '#4CAF50';
+        isTeaching = true;
+        updateLED('🚀 수업을 시작합니다!');
+        updateStatus('수업 준비 중...');
+        
+        // 버튼 상태 변경
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {{
+            startBtn.textContent = '⏳ 진행 중...';
+            startBtn.style.background = '#FFC107';
         }}
         
-        console.log('TTS 정지됨');
+        // 타이핑 시작
+        setTimeout(startTyping, 1000);
     }}
     
-    // 다시 듣기
-    function replayVoice() {{
-        stopVoiceNow();
-        setTimeout(playVoiceNow, 500);
-    }}
-    
-    // 초기화 및 자동 재생
-    function initializeTTS() {{
-        const voices = speechSynthesis.getVoices();
-        if (voices.length > 0) {{
-            updateLED('🚀 시스템 준비 완료', false);
-            updateStatus('음성 시스템 준비됨. 자동 재생 시작...');
-            console.log('TTS 시스템 초기화 완료');
-            
-            // 2초 후 자동 재생
-            setTimeout(function() {{
-                if (!isVoicePlaying) {{
-                    playVoiceNow();
-                }}
-            }}, 2000);
-        }} else {{
-            updateLED('⏳ 음성 엔진 로딩 중...', true);
-            updateStatus('음성 엔진을 불러오는 중입니다...');
-            console.log('음성 엔진 로딩 중');
-        }}
-    }}
-    
-    // 음성 목록 로드 대기
-    if (speechSynthesis.getVoices().length > 0) {{
-        initializeTTS();
-    }} else {{
-        speechSynthesis.onvoiceschanged = function() {{
-            initializeTTS();
-        }};
-    }}
-    
-    // 5초 후에도 자동 재생 안되면 수동 안내
-    setTimeout(function() {{
-        if (!isVoicePlaying) {{
-            updateLED('🔽 수동으로 "음성 재생" 버튼을 눌러주세요', false);
-            updateStatus('자동 재생이 안 되면 수동으로 버튼을 눌러주세요.');
-        }}
-    }}, 5000);
-    </script>
-    """
-    
-    return tts_html
-
-# 🔊 향상된 타이핑 애니메이션 - 더 생생한 효과
-def create_typing_animation(response):
-    """향상된 타이핑 애니메이션 HTML 생성"""
-    # 텍스트 정리
-    clean_text = response.replace('"', '').replace("'", '').replace('\n', ' ')[:200]
-    safe_text = clean_text.replace("'", "\\'").replace('"', '\\"')
-    
-    typing_html = f"""
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin: 15px 0; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.3);">
-        <h3>✍️ AI 선생님이 칠판에 쓰고 있습니다...</h3>
-        <div id="typing-status" style="font-size: 18px; margin: 15px 0;">준비 중...</div>
+    // 수업 정지
+    function stopTeaching() {{
+        isTeaching = false;
         
-        <!-- 타이핑 진행바 -->
-        <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 8px; margin: 20px 0; overflow: hidden;">
-            <div id="progress-bar" style="background: #FFD700; height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 10px;"></div>
-        </div>
-        
-        <!-- 타이핑 사운드 시각화 -->
-        <div id="typing-visual" style="display: flex; justify-content: center; align-items: center; height: 40px; margin: 15px 0;">
-            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both;"></div>
-            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></div>
-            <div class="type-dot" style="width: 8px; height: 8px; background: #FFD700; border-radius: 50%; margin: 0 3px; animation: typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></div>
-        </div>
-        
-        <div id="text-preview" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px; opacity: 0.8;">
-            "{clean_text[:100]}{'...' if len(clean_text) > 100 else ''}"
-        </div>
-    </div>
-    
-    <style>
-    @keyframes typing-bounce {{
-        0%, 80%, 100% {{ transform: scale(0); }}
-        40% {{ transform: scale(1); }}
-    }}
-    
-    @keyframes pulse-glow {{
-        0% {{ box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }}
-        50% {{ box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }}
-        100% {{ box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }}
-    }}
-    </style>
-    
-    <script>
-    let typingProgress = 0;
-    let typingInterval;
-    let isTypingComplete = false;
-    
-    function startTypingAnimation() {{
-        const statusElement = document.getElementById('typing-status');
-        const progressBar = document.getElementById('progress-bar');
-        
-        const messages = [
-            '🖊️ 칠판에 제목을 쓰는 중...',
-            '📐 수식을 정리하는 중...',
-            '🎨 중요한 부분을 강조하는 중...',
-            '📝 예시를 추가하는 중...',
-            '✅ 칠판 작성 완료!'
-        ];
-        
-        let messageIndex = 0;
-        let progress = 0;
-        
-        typingInterval = setInterval(() => {{
-            progress += 2;
-            
-            if (progressBar) {{
-                progressBar.style.width = progress + '%';
-            }}
-            
-            // 메시지 변경
-            if (progress > messageIndex * 20 && messageIndex < messages.length - 1) {{
-                messageIndex++;
-                if (statusElement) {{
-                    statusElement.textContent = messages[messageIndex];
-                }}
-            }}
-            
-            // 완료 처리
-            if (progress >= 100) {{
-                clearInterval(typingInterval);
-                isTypingComplete = true;
-                
-                if (statusElement) {{
-                    statusElement.innerHTML = '✅ 완료! 이제 음성으로 설명을 들어보세요 🔊';
-                    statusElement.style.color = '#90EE90';
-                    statusElement.style.fontWeight = 'bold';
-                }}
-                
-                // 타이핑 도트 숨기기
-                const typingVisual = document.getElementById('typing-visual');
-                if (typingVisual) {{
-                    typingVisual.style.display = 'none';
-                }}
-                
-                console.log('타이핑 애니메이션 완료');
-            }}
-        }}, 150); // 150ms 간격으로 업데이트
-        
-        console.log('타이핑 애니메이션 시작');
-    }}
-    
-    // 3초 후 완료 (음성 재생 시작 신호)
-    setTimeout(() => {{
-        if (!isTypingComplete) {{
+        // 타이핑 정지
+        if (typingInterval) {{
             clearInterval(typingInterval);
-            const statusElement = document.getElementById('typing-status');
-            const progressBar = document.getElementById('progress-bar');
-            
-            if (progressBar) progressBar.style.width = '100%';
-            if (statusElement) {{
-                statusElement.innerHTML = '✅ 완료! 이제 음성으로 설명을 들어보세요 🔊';
-                statusElement.style.color = '#90EE90';
-                statusElement.style.fontWeight = 'bold';
-            }}
-            
-            isTypingComplete = true;
+            typingInterval = null;
         }}
-    }}, 3000);
+        
+        // 음성 정지
+        speechSynthesis.cancel();
+        
+        // UI 업데이트
+        updateLED('🛑 수업이 중단되었습니다');
+        updateStatus('정지됨');
+        toggleEqualizer(false);
+        
+        // 커서 숨김
+        const cursor = document.getElementById('typing-cursor');
+        if (cursor) cursor.style.display = 'none';
+        
+        // 버튼 복원
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {{
+            startBtn.textContent = '🎬 수업 시작';
+            startBtn.style.background = '#4CAF50';
+        }}
+        
+        console.log('수업 중단됨');
+    }}
     
-    // 애니메이션 시작
-    setTimeout(startTypingAnimation, 500);
+    // 다시보기
+    function replayTeaching() {{
+        stopTeaching();
+        setTimeout(startTeaching, 1000);
+    }}
+    
+    // 초기화
+    function initializeSystem() {{
+        updateLED('🚀 시스템 준비 완료');
+        updateStatus('준비됨 - "수업 시작" 버튼을 눌러주세요');
+        console.log('AI 튜터 시스템 초기화 완료');
+        
+        // 음성 엔진 대기
+        if (speechSynthesis.getVoices().length === 0) {{
+            speechSynthesis.onvoiceschanged = function() {{
+                console.log('음성 엔진 로드 완료');
+                updateStatus('음성 엔진 준비됨 - 수업을 시작할 수 있습니다');
+            }};
+        }}
+    }}
+    
+    // 시스템 시작
+    setTimeout(initializeSystem, 1000);
     </script>
     """
     
-    return typing_html
+    return html_system
 
 # 페이지 설정
 st.set_page_config(
@@ -567,216 +505,49 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS 스타일 - 완전 복원
+# CSS 스타일
 st.markdown("""
 <style>
     .teacher-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 15px;
-        border-radius: 10px;
+        padding: 20px;
+        border-radius: 15px;
         text-align: center;
         color: white;
         margin-bottom: 20px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.3);
     }
     
-    .blackboard {
-        background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%);
-        color: #ffffff;
-        padding: 30px;
-        border-radius: 15px;
-        font-family: 'Georgia', serif;
-        font-size: 18px;
-        line-height: 1.8;
-        height: 500px;  /* 고정 높이 */
-        border: 8px solid #8B4513;
-        box-shadow: 
-            inset 0 0 30px rgba(0,0,0,0.3),
-            0 10px 20px rgba(0,0,0,0.2);
-        overflow-y: auto;  /* 세로 스크롤 활성화 */
-        white-space: pre-wrap;
-        position: relative;
-        scroll-behavior: smooth;  /* 부드러운 스크롤 */
-    }
-    
-    .blackboard::-webkit-scrollbar {
-        width: 12px;
-    }
-    
-    .blackboard::-webkit-scrollbar-track {
-        background: rgba(139, 69, 19, 0.3);
-        border-radius: 6px;
-    }
-    
-    .blackboard::-webkit-scrollbar-thumb {
-        background: rgba(255, 215, 0, 0.6);
-        border-radius: 6px;
-    }
-    
-    .blackboard::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 215, 0, 0.8);
-    }
-    
-    .blackboard::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: 
-            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.1) 1px, transparent 1px),
-            radial-gradient(circle at 60% 70%, rgba(255,255,255,0.05) 1px, transparent 1px),
-            radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 1px, transparent 1px);
-        pointer-events: none;
-    }
-    
-    .blackboard h1, .blackboard h2, .blackboard h3 {
-        color: #FFD700;
-        text-decoration: underline;
-        margin: 25px 0 15px 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    }
-    
-    .blackboard .important {
-        background: #FFD700;
-        color: #000;
-        padding: 3px 8px;
-        border-radius: 5px;
-        font-weight: bold;
-        box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .blackboard .formula {
-        background: linear-gradient(135deg, #4169E1, #6495ED);
-        color: white;
-        padding: 15px;
-        border-radius: 10px;
-        font-size: 20px;
-        text-align: center;
-        margin: 15px 0;
-        border-left: 6px solid #FFD700;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        font-family: 'Courier New', monospace;
-    }
-    
-    .blackboard .highlight-red {
-        color: #FF6B6B;
-        font-weight: bold;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-    }
-    
-    .blackboard .highlight-blue {
-        color: #4DABF7;
-        font-weight: bold;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-    }
-    
-    .blackboard .highlight-green {
-        color: #51CF66;
-        font-weight: bold;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-    }
-    
-    .blackboard .circle {
-        border: 3px solid #FFD700;
-        border-radius: 50%;
-        padding: 8px 15px;
-        display: inline-block;
-        margin: 5px;
-        background: rgba(255, 215, 0, 0.1);
-        box-shadow: 0 3px 8px rgba(0,0,0,0.3);
-    }
-    
-    .typing-text {
-        display: inline;
-    }
-    
-    .cursor {
-        display: inline-block;
-        background-color: #FFD700;
-        width: 3px;
-        animation: blink 1s infinite;
-    }
-    
-    @keyframes blink {
-        0%, 50% { opacity: 1; }
-        51%, 100% { opacity: 0; }
-    }
-    
-    .mic-button {
-        background: #e74c3c;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 80px;
-        height: 80px;
-        font-size: 24px;
-        cursor: pointer;
-        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
-        transition: all 0.3s ease;
-        margin: 20px;
-    }
-    
-    .mic-button:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
-    }
-    
-    .mic-button.active {
-        background: #27ae60;
-        animation: pulse 1s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-    
-    .chat-container {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 15px;
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid #dee2e6;
-    }
-    
-    .user-message {
-        background: #007bff;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 15px 15px 5px 15px;
-        margin: 5px 0;
-        margin-left: 50px;
-        word-wrap: break-word;
-    }
-    
-    .ai-message {
-        background: #28a745;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 15px 15px 15px 5px;
-        margin: 5px 0;
-        margin-right: 50px;
-        word-wrap: break-word;
+    .main-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
     }
     
     .control-panel {
         background: white;
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-radius: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         margin: 20px 0;
     }
     
-    .typing-animation {
-        animation: typewriter 0.05s steps(1) infinite;
+    .quick-btn {
+        width: 100%;
+        padding: 12px;
+        margin: 5px 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
     }
     
-    @keyframes typewriter {
-        from { opacity: 0; }
-        to { opacity: 1; }
+    .quick-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -795,13 +566,9 @@ def initialize_teacher():
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
-    # 칠판 내용 초기화
-    if 'blackboard_content' not in st.session_state:
-        st.session_state.blackboard_content = f"🎓 {teacher['name']}의 {teacher['subject']} 수업\n\n📚 교육 수준: {teacher['level']}\n\n수업을 시작할 준비가 되었습니다!\n마이크 버튼을 눌러 질문하거나 수업을 요청해보세요."
-    
-    # 마이크 상태
-    if 'is_recording' not in st.session_state:
-        st.session_state.is_recording = False
+    # 현재 설명 내용
+    if 'current_explanation' not in st.session_state:
+        st.session_state.current_explanation = ""
     
     return teacher
 
@@ -813,262 +580,162 @@ def main():
     # 헤더
     st.markdown(f"""
     <div class="teacher-header">
-        <h1>👨‍🏫 {teacher['name']}</h1>
-        <p>{teacher['subject']} | {teacher['level']} 수준</p>
+        <h1>👨‍🏫 {teacher['name']} AI 튜터</h1>
+        <p>📚 {teacher['subject']} | 🎯 {teacher['level']} 수준</p>
+        <p>💬 실시간 타이핑 + 음성 설명</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # 종료 버튼
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col1:
-        if st.button("🏠 메인으로 돌아가기"):
-            # 세션 클리어
-            if 'chat_history' in st.session_state:
-                del st.session_state.chat_history
-            if 'blackboard_content' in st.session_state:
-                del st.session_state.blackboard_content
-            st.switch_page("app.py")
-    
-    with col3:
-        if st.button("🗑️ 칠판 지우기"):
-            st.session_state.blackboard_content = ""
-            st.rerun()
-    
     # 메인 레이아웃
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([3, 1])
     
     with col1:
-        st.subheader("📋 AI 칠판")
-        
-        # 칠판 내용 표시
-        if st.session_state.blackboard_content:
-            # 단순한 칠판 표시
-            st.markdown(f'''
-            <div class="blackboard">
-                <h2>📚 AI 칠판</h2>
-                <div>{format_blackboard_text(st.session_state.blackboard_content)}</div>
-            </div>
-            ''', unsafe_allow_html=True)
+        # 칠판 + TTS 시스템 표시
+        if st.session_state.current_explanation:
+            voice_settings = {
+                'speed': teacher.get('voice_settings', {}).get('speed', 1.0),
+                'pitch': teacher.get('voice_settings', {}).get('pitch', 1.0)
+            }
+            
+            typing_system = create_typing_blackboard_system(
+                st.session_state.current_explanation, 
+                voice_settings
+            )
+            st.components.v1.html(typing_system, height=800)
         else:
-            st.markdown('''
-            <div class="blackboard">
-                <h2>📚 AI 칠판</h2>
-                <div style="text-align: center; color: #ccc; margin-top: 50px;">
-                    칠판이 비어있습니다.<br>
-                    질문을 입력하면 AI가 여기에 설명을 써드립니다.
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
+            # 빈 칠판
+            empty_system = create_typing_blackboard_system("아직 수업 내용이 없습니다. 오른쪽에서 질문을 선택하거나 입력해주세요.", {'speed': 1.0, 'pitch': 1.0})
+            st.components.v1.html(empty_system, height=800)
     
     with col2:
-        st.subheader("🎤 음성 컨트롤")
+        # 컨트롤 패널
+        st.markdown('<div class="control-panel">', unsafe_allow_html=True)
         
-        # Push-to-Talk 버튼
-        mic_container = st.empty()
+        # 메인 버튼들
+        if st.button("🏠 메인으로", key="home_btn"):
+            # 세션 클리어
+            for key in ['chat_history', 'current_explanation']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.switch_page("app.py")
         
-        if st.session_state.is_recording:
-            if mic_container.button("🎤 녹음 중... (놓으면 전송)", key="stop_recording", help="버튼을 놓으면 음성 전송"):
-                st.session_state.is_recording = False
-                # 여기서 음성 인식 처리
-                process_voice_input()
-                st.rerun()
-        else:
-            if mic_container.button("🎤 눌러서 말하기", key="start_recording", help="버튼을 누르고 있는 동안 녹음"):
-                st.session_state.is_recording = True
-                st.rerun()
+        if st.button("🗑️ 칠판 지우기", key="clear_btn"):
+            st.session_state.current_explanation = ""
+            st.rerun()
         
-        # 텍스트 입력 추가 (테스트용)
-        st.subheader("💬 텍스트 입력")
-        user_text = st.text_input("질문을 입력하세요:", key="text_input", placeholder="예: 전자기 유도에 대해 설명해주세요")
-        
-        if st.button("📝 텍스트 전송", key="send_text"):
-            if user_text:
-                process_text_input(user_text)
-                st.rerun()
+        st.markdown("---")
         
         # 빠른 질문 버튼들
         st.subheader("🎯 빠른 질문")
+        
         quick_questions = [
-            "기본 개념 설명해주세요",
+            "기본 개념을 설명해주세요",
             "실생활 예시를 들어주세요", 
-            "공식이나 법칙을 알려주세요",
-            "연습 문제를 내주세요"
+            "관련 공식을 알려주세요",
+            "연습 문제를 내주세요",
+            "중요한 포인트를 정리해주세요"
         ]
         
         for i, question in enumerate(quick_questions):
-            if st.button(question, key=f"quick_{i}"):
-                process_text_input(question)
+            if st.button(question, key=f"quick_{i}", help=f"'{question}' 질문하기"):
+                process_question(question)
                 st.rerun()
         
-        # 칠판 기능 테스트 버튼
-        if st.button("🧪 칠판 기능 테스트", key="test_blackboard"):
-            test_content = """## 📚 물리학 - 뉴턴 법칙
-
-**🔹 정의**
-뉴턴의 제1법칙: 관성의 법칙이란 외부 힘이 작용하지 않으면 물체는 정지 상태나 등속직선운동을 계속한다는 법칙입니다.
-
-$$ F = ma $$
-
-[RED]**⚠️ 중요: 힘과 가속도는 비례관계입니다**[/RED]
-
-[GREEN]📋 예: 자동차가 급정거할 때 승객이 앞으로 쏠리는 현상[/GREEN]
-
-[BLUE]**💡 결론: 뉴턴 법칙은 모든 운동의 기초가 됩니다**[/BLUE]
-
-  • 제1법칙: 관성의 법칙
-  • 제2법칙: 가속도의 법칙 
-  • 제3법칙: 작용-반작용의 법칙"""
-            
-            st.session_state.blackboard_content = f"🎓 AI 튜터 칠판\n{'='*50}\n{test_content}"
-            st.success("🎉 칠판 기능 테스트 완료! 이제 AI가 이런 식으로 칠판을 활용합니다!")
-            st.rerun()
+        st.markdown("---")
+        
+        # 직접 입력
+        st.subheader("💬 직접 질문")
+        user_input = st.text_area(
+            "질문을 입력하세요:",
+            placeholder="예: 뉴턴의 운동법칙에 대해 설명해주세요",
+            height=100,
+            key="user_question"
+        )
+        
+        if st.button("📝 질문하기", key="ask_btn"):
+            if user_input.strip():
+                process_question(user_input)
+                st.rerun()
+            else:
+                st.warning("질문을 입력해주세요!")
+        
+        st.markdown("---")
         
         # 음성 설정
         st.subheader("🔊 음성 설정")
         with st.expander("설정 조절"):
-            voice_speed = st.slider("음성 속도", 0.5, 2.0, teacher['voice_settings']['speed'], 0.1)
-            voice_pitch = st.slider("음성 높이", 0.5, 2.0, teacher['voice_settings']['pitch'], 0.1)
-            auto_play = st.checkbox("자동 재생", teacher['voice_settings']['auto_play'])
+            voice_speed = st.slider("음성 속도", 0.5, 2.0, 1.0, 0.1, key="speed_slider")
+            voice_pitch = st.slider("음성 높이", 0.5, 2.0, 1.0, 0.1, key="pitch_slider")
+            
+            # 설정 저장
+            if 'voice_settings' not in teacher:
+                teacher['voice_settings'] = {}
+            teacher['voice_settings']['speed'] = voice_speed
+            teacher['voice_settings']['pitch'] = voice_pitch
         
-        # 채팅 히스토리
-        st.subheader("💬 대화 기록")
-        chat_container = st.container()
-        
-        with chat_container:
-            if st.session_state.chat_history:
-                chat_html = '<div class="chat-container">'
-                for message in st.session_state.chat_history[-5:]:  # 최근 5개만 표시
-                    if message['role'] == 'user':
-                        chat_html += f'<div class="user-message">👤 {message["content"]}</div>'
-                    else:
-                        chat_html += f'<div class="ai-message">🤖 {message["content"]}</div>'
-                chat_html += '</div>'
-                st.markdown(chat_html, unsafe_allow_html=True)
-            else:
-                st.info("아직 대화가 없습니다. 마이크 버튼을 눌러 시작해보세요!")
-    
-    # 컨트롤 패널 - 완전 복원
-    with st.expander("⚙️ 고급 설정", expanded=False):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("📝 칠판 메모")
-            custom_text = st.text_area("추가할 내용:", key="memo_textarea")
-            if st.button("📝 칠판에 메모 추가", key="add_memo_btn"):
-                if custom_text:
-                    st.session_state.blackboard_content += f"\n\n📝 메모: {custom_text}"
-                    st.success("메모가 추가되었습니다!")
-                    st.rerun()
-        
-        with col2:
-            st.subheader("🎯 주제 요청")
-            topic = st.text_input("학습하고 싶은 주제:", key="topic_input")
-            if st.button("🎯 특정 주제 요청", key="request_topic_btn"):
-                if topic:
-                    process_topic_request(topic)
-                    st.rerun()
-        
-        with col3:
-            st.subheader("💾 수업 저장")
-            if st.button("💾 수업 내용 저장", key="save_lesson_btn"):
-                save_lesson_content()
+        # 테스트 버튼
+        if st.button("🧪 시스템 테스트", key="test_btn"):
+            test_explanation = """## 뉴턴의 운동 법칙
 
-def process_text_input(user_input):
-    """텍스트 입력 처리 - 완전한 TTS + 애니메이션 복원"""
+**제1법칙: 관성의 법칙**
+외부 힘이 작용하지 않으면 물체는 정지 상태나 등속직선운동을 계속합니다.
+
+**제2법칙: 가속도의 법칙**
+F = ma
+
+<RED>중요: 힘과 가속도는 비례관계입니다</RED>
+
+<BLUE>예: 자동차 급정거 시 승객이 앞으로 쏠리는 현상</BLUE>
+
+<U>결론: 뉴턴 법칙은 모든 운동의 기초입니다</U>"""
+            
+            st.session_state.current_explanation = test_explanation
+            st.success("🎉 테스트 수업이 준비되었습니다!")
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def process_question(question):
+    """질문 처리 및 AI 응답 생성"""
     try:
-        if user_input:
-            # 사용자 메시지 추가
+        teacher = st.session_state.selected_teacher
+        
+        # 채팅 히스토리에 추가
+        st.session_state.chat_history.append({
+            'role': 'user',
+            'content': question,
+            'timestamp': datetime.now()
+        })
+        
+        # AI 응답 생성
+        system_prompt = generate_system_prompt(teacher)
+        
+        with st.spinner("🤔 AI가 답변을 준비하고 있습니다..."):
+            ai_response = get_claude_response(question, system_prompt, st.session_state.chat_history)
+        
+        if ai_response and "오류가 발생했습니다" not in ai_response:
+            # AI 응답 저장
             st.session_state.chat_history.append({
-                'role': 'user',
-                'content': user_input,
+                'role': 'assistant',
+                'content': ai_response,
                 'timestamp': datetime.now()
             })
             
-            # AI 응답 생성
-            teacher = st.session_state.selected_teacher
-            system_prompt = generate_system_prompt(teacher)
+            # 칠판 설명 내용으로 설정
+            st.session_state.current_explanation = format_for_blackboard(ai_response)
             
-            # Claude API 호출
-            with st.spinner("🤔 AI가 생각하고 있습니다..."):
-                ai_response = get_claude_response(user_input, system_prompt, st.session_state.chat_history)
+            st.success("✅ AI 답변이 준비되었습니다! 칠판의 '수업 시작' 버튼을 눌러주세요!")
             
-            if ai_response and "오류가 발생했습니다" not in ai_response:
-                # AI 응답 추가
-                st.session_state.chat_history.append({
-                    'role': 'assistant',
-                    'content': ai_response,
-                    'timestamp': datetime.now()
-                })
-                
-                # 칠판 업데이트
-                update_blackboard_with_response(ai_response)
-                
-                # 🔊 TTS 재생 (자동 재생이 켜져있으면)
-                if teacher.get('voice_settings', {}).get('auto_play', True):
-                    st.success("✅ AI 응답 완료! 🎬 칠판 타이핑 + 음성 재생 시작...")
-                    
-                    # 전광판 효과가 있는 TTS 재생
-                    voice_settings = {
-                        'speed': teacher.get('voice_settings', {}).get('speed', 1.0),
-                        'pitch': teacher.get('voice_settings', {}).get('pitch', 1.0)
-                    }
-                    
-                    tts_html = play_immediate_tts(ai_response, voice_settings)
-                    st.components.v1.html(tts_html, height=450)
-                    
-                    # 타이핑 애니메이션 효과 추가
-                    typing_html = create_typing_animation(ai_response)
-                    st.components.v1.html(typing_html, height=150)
-                    
-                else:
-                    st.success("✅ AI 응답 완료! (음성 재생 꺼짐)")
-                    # 음성 없어도 타이핑 효과는 보여주기
-                    typing_html = create_typing_animation(ai_response)
-                    st.components.v1.html(typing_html, height=150)
-                
-                # 페이지 새로고침으로 칠판 업데이트 (중요!)
-                st.rerun()
-                
-            else:
-                st.error(f"❌ AI 응답 오류: {ai_response}")
-                
+        else:
+            st.error(f"❌ AI 응답 오류: {ai_response}")
+            
     except Exception as e:
         st.error(f"처리 중 오류: {str(e)}")
-        st.exception(e)
 
-def process_voice_input():
-    """음성 입력 처리"""
-    # 음성은 나중에 구현하고, 일단 테스트 메시지로
-    test_message = "안녕하세요, 전자기 유도에 대해 설명해주세요"
-    process_text_input(test_message)
-
-def update_blackboard_with_response(response):
-    """AI 응답을 칠판에 구조화해서 업데이트"""
-    # 칠판 형식으로 변환
-    blackboard_text = format_response_for_blackboard(response)
-    
-    # 새로운 수업 내용임을 명확히 표시
-    timestamp = datetime.now().strftime("%H:%M")
-    separator = f"\n\n🕐 {timestamp} - 새로운 설명\n{'🔥'*25}\n"
-    
-    # 기존 내용에 추가
-    if st.session_state.blackboard_content:
-        # 초기 메시지가 아닌 경우에만 구분선 추가
-        if "수업을 시작할 준비가 되었습니다" not in st.session_state.blackboard_content:
-            st.session_state.blackboard_content += separator + blackboard_text
-        else:
-            # 첫 번째 응답인 경우 초기 메시지 교체
-            st.session_state.blackboard_content = f"🎓 AI 튜터 칠판\n{'='*50}\n{blackboard_text}"
-    else:
-        st.session_state.blackboard_content = f"🎓 AI 튜터 칠판\n{'='*50}\n{blackboard_text}"
-
-def format_response_for_blackboard(response):
-    """응답을 칠판 형식으로 스마트하게 포맷팅"""
+def format_for_blackboard(response):
+    """AI 응답을 칠판 형식으로 변환"""
     lines = response.split('\n')
     formatted = ""
-    
-    # 제목 생성 (첫 번째 중요한 내용 기반)
-    title_found = False
     
     for line in lines:
         line = line.strip()
@@ -1076,103 +743,40 @@ def format_response_for_blackboard(response):
             formatted += "\n"
             continue
         
-        # 1. 제목/주제 감지 및 포맷팅
-        if not title_found and (len(line) < 60 and any(keyword in line for keyword in ['에 대해', '란', '이란', '개념', '원리', '법칙', '공식', '정의'])):
-            formatted += f"\n## 📚 {line}\n{'='*40}\n"
-            title_found = True
+        # 제목 감지
+        if any(keyword in line for keyword in ['에 대해', '란', '이란', '개념', '원리', '법칙']) and len(line) < 60:
+            formatted += f"## {line}\n\n"
             continue
         
-        # 2. 수식/공식 감지 및 강조
-        if ('=' in line and any(char in line for char in ['²', '³', '+', '-', '*', '/', '∆', 'π', '∑', '∫'])) or \
-           (re.search(r'[A-Za-z]\s*=\s*[A-Za-z0-9]', line)) or \
-           ('공식' in line and '=' in line):
-            formatted += f"\n[BLUE]$$ {line.strip()} $$[/BLUE]\n"
+        # 정의 감지
+        if '정의:' in line or '개념:' in line:
+            formatted += f"**{line}**\n"
             continue
         
-        # 3. 정의/개념 감지
-        if ('정의:' in line or '개념:' in line or '이란' in line or '란' in line) and len(line) < 100:
-            formatted += f"\n**🔹 정의**\n{line}\n"
+        # 공식 감지
+        if '=' in line and any(char in line for char in ['²', '³', '+', '-', '*', '/']):
+            formatted += f"{line}\n\n"
             continue
         
-        # 4. 단계별 설명 감지
-        if re.match(r'^\d+[.)]\s*', line) or line.startswith('단계') or line.startswith('Step'):
-            formatted += f"\n**{line}**\n"
+        # 중요사항 감지
+        if any(keyword in line for keyword in ['중요', '핵심', '주의', '반드시']):
+            formatted += f"<RED>{line}</RED>\n\n"
             continue
         
-        # 5. 예시 감지
-        if line.startswith('예:') or line.startswith('예시:') or '예를 들어' in line[:20]:
-            formatted += f"\n[GREEN]📋 {line}[/GREEN]\n"
+        # 예시 감지
+        if '예:' in line or '예시:' in line or '예를 들어' in line:
+            formatted += f"<BLUE>{line}</BLUE>\n\n"
             continue
         
-        # 6. 결과/결론 감지
-        if line.startswith('결과:') or line.startswith('따라서') or line.startswith('결론적으로'):
-            formatted += f"\n[RED]**💡 {line}**[/RED]\n"
+        # 결론 감지
+        if '결론' in line or '따라서' in line:
+            formatted += f"<U>{line}</U>\n\n"
             continue
         
-        # 7. 중요 키워드 강조 (기존보다 더 광범위)
-        if any(keyword in line for keyword in ['중요', '핵심', '주의', '기억', '포인트', '반드시', '꼭', '절대', '특히']):
-            formatted += f"\n[RED]**⚠️ {line}**[/RED]\n"
-            continue
-        
-        # 8. 특성/특징 설명
-        if ('특징' in line or '특성' in line or '장점' in line or '단점' in line) and len(line) < 80:
-            formatted += f"\n**🔸 {line}**\n"
-            continue
-        
-        # 9. 일반 텍스트 (들여쓰기로 구조화)
-        if len(line) > 5:  # 너무 짧은 라인 제외
-            formatted += f"  • {line}\n"
-    
-    # 칠판 하단에 구분선 추가
-    if formatted.strip():
-        formatted += f"\n{'─'*50}\n"
+        # 일반 텍스트
+        formatted += f"{line}\n"
     
     return formatted
-
-def process_topic_request(topic):
-    """특정 주제 요청 처리"""
-    request = f"{topic}에 대해 상세히 설명해주세요. 칠판에 중요한 내용을 정리해서 써주세요."
-    
-    # 채팅 히스토리에 추가
-    st.session_state.chat_history.append({
-        'role': 'user',
-        'content': request,
-        'timestamp': datetime.now()
-    })
-    
-    # AI 응답 생성
-    teacher = st.session_state.selected_teacher
-    system_prompt = generate_system_prompt(teacher)
-    
-    ai_response = get_claude_response(request, system_prompt, st.session_state.chat_history)
-    
-    # 응답 처리
-    st.session_state.chat_history.append({
-        'role': 'assistant',
-        'content': ai_response,
-        'timestamp': datetime.now()
-    })
-    
-    update_blackboard_with_response(ai_response)
-
-def save_lesson_content():
-    """수업 내용 저장"""
-    if st.session_state.blackboard_content:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        teacher_name = st.session_state.selected_teacher['name']
-        
-        # 파일로 저장하는 로직 (실제로는 클라우드 저장)
-        content = f"# {teacher_name} 수업 내용\n날짜: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{st.session_state.blackboard_content}"
-        
-        st.success(f"수업 내용이 저장되었습니다! (파일명: lesson_{timestamp}.md)")
-        
-        # 다운로드 버튼
-        st.download_button(
-            label="📥 수업 내용 다운로드",
-            data=content,
-            file_name=f"lesson_{teacher_name}_{timestamp}.md",
-            mime="text/markdown"
-        )
 
 if __name__ == "__main__":
     main()
