@@ -81,17 +81,28 @@ def generate_system_prompt(teacher_config):
 {natural_speech_instruction}
 
 🎯 **칠판 사용 지침 (매우 중요!)** 
-칠판에는 반드시 다음 형식으로 써주세요:
+칠판에는 반드시 다음 형식으로만 써주세요:
 
 1. **제목**: ## 주제명
 2. **정의**: **개념 = 설명**  
-3. **공식**: F = ma
+3. **공식**: F = ma (등식 형태)
 4. **중요사항**: <RED>중요한 내용</RED>
 5. **보충설명**: <BLUE>추가 정보</BLUE>
 6. **강조**: <U>밑줄 강조</U>
 
-색상은 흰색(기본), 빨간색, 파란색, 밑줄만 사용하세요.
-복잡한 색상이나 이모지는 사용하지 마세요.
+⚠️ 주의사항:
+- 반드시 위의 태그 형태만 사용하세요: <RED></RED>, <BLUE></BLUE>, <U></U>
+- s="red" 같은 형태는 절대 사용하지 마세요
+- 복잡한 HTML이나 CSS는 사용하지 마세요
+- 색상은 흰색(기본), 빨간색, 파란색, 밑줄만 사용하세요
+
+예시:
+## 뉴턴의 법칙
+**정의**: 물체의 운동을 설명하는 법칙
+F = ma
+<RED>중요: 힘과 질량의 관계</RED>
+<BLUE>예: 자동차의 가속</BLUE>
+<U>결론: 모든 운동의 기초</U>
 
 학생이 이해하기 쉽게 단계별로 차근차근 설명해주세요."""
 
@@ -116,18 +127,23 @@ def format_blackboard_text(text):
 
 # 🎬 완전한 칠판 타이핑 + TTS 시스템
 def create_typing_blackboard_system(text, voice_settings=None):
-    """칠판 타이핑 + 음성 재생 통합 시스템"""
+    """칠판 타이핑 + 음성 재생 통합 시스템 - 완전 안전 버전"""
     if voice_settings is None:
         voice_settings = {'speed': 1.0, 'pitch': 1.0}
     
-    # 텍스트 정리
-    clean_text = text.replace('\n', ' ').replace('"', '').replace("'", '')
-    clean_text = re.sub(r'<[^>]+>', '', clean_text)  # HTML 태그 제거
-    clean_text = clean_text.replace('**', '').replace('*', '')[:500]  # 500자 제한
+    # 텍스트 안전 처리 (매우 엄격하게)
+    clean_text = text.replace('\n', ' ').replace('"', '').replace("'", "")
+    clean_text = re.sub(r'<[^>]+>', '', clean_text)  # 모든 HTML 태그 제거
+    clean_text = re.sub(r'[<>]', '', clean_text)  # < > 문자 제거
+    clean_text = clean_text.replace('**', '').replace('*', '')
+    clean_text = re.sub(r'[^\w\s가-힣.,!?=\-+*/():]', '', clean_text)  # 안전한 문자만 유지
+    clean_text = clean_text[:500]  # 500자 제한
     
-    # 안전한 텍스트 처리
-    safe_text = clean_text.replace("'", "\\'").replace('"', '\\"')
-    safe_display_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n')
+    # 표시용 텍스트도 안전하게 처리
+    display_text = text.replace("'", " ").replace('"', " ").replace('\\', " ")
+    display_text = re.sub(r'[<>]', '', display_text)  # < > 완전 제거
+    display_text = display_text.replace('\n', ' ')  # 줄바꿈을 공백으로
+    display_text = re.sub(r'[^\w\s가-힣.,!?=\-+*/():*#>REDBLAU]', '', display_text)  # 매우 제한적
     
     speed = voice_settings.get('speed', 1.0)
     pitch = voice_settings.get('pitch', 1.0)
@@ -171,17 +187,17 @@ def create_typing_blackboard_system(text, voice_settings=None):
             <div id="voice-status" style="font-size: 12px; opacity: 0.9;">시스템 준비 중...</div>
         </div>
         
-        <!-- 📝 칠판 영역 -->
+        <!-- 📝 칠판 영역 (개선된 폰트) -->
         <div id="blackboard-container" style="background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%); border: 8px solid #8B4513; border-radius: 15px; padding: 30px; min-height: 600px; max-height: 600px; overflow-y: auto; position: relative;">
             
             <!-- 칠판 제목 -->
-            <div style="text-align: center; color: #FFD700; font-size: 24px; font-weight: bold; margin-bottom: 30px; border-bottom: 2px solid #FFD700; padding-bottom: 10px;">
+            <div style="text-align: center; color: #FFD700; font-size: 24px; font-weight: bold; margin-bottom: 30px; border-bottom: 2px solid #FFD700; padding-bottom: 10px; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;">
                 📚 AI 튜터 칠판
             </div>
             
             <!-- 타이핑되는 내용 -->
-            <div id="blackboard-content" style="color: white; font-size: 18px; line-height: 1.8; font-family: 'Georgia', serif;">
-                <div style="text-align: center; color: #ccc; margin-top: 100px;">
+            <div id="blackboard-content" style="color: white; font-size: 18px; line-height: 1.8; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-weight: 400; letter-spacing: 0.5px;">
+                <div style="text-align: center; color: #ccc; margin-top: 100px; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;">
                     수업을 시작하려면 "🎬 수업 시작" 버튼을 눌러주세요
                 </div>
             </div>
@@ -264,14 +280,14 @@ def create_typing_blackboard_system(text, voice_settings=None):
     </style>
     
     <script>
-    // 전역 변수
+    // 전역 변수 (완전 안전 처리)
     let isTeaching = false;
     let typingInterval = null;
     let ttsUtterance = null;
-    let currentText = "{safe_display_text}";
+    let currentText = `{display_text}`;
     let voiceSpeed = {speed};
     let voicePitch = {pitch};
-    let speechText = "{safe_text}";
+    let speechText = `{clean_text}`;
     
     // LED 업데이트
     function updateLED(message) {{
@@ -673,24 +689,29 @@ def main():
             teacher['voice_settings']['speed'] = voice_speed
             teacher['voice_settings']['pitch'] = voice_pitch
         
-        # 테스트 버튼
+        # 테스트 버튼 (완전 안전한 데이터)
         if st.button("🧪 시스템 테스트", key="test_btn"):
-            test_explanation = """## 뉴턴의 운동 법칙
+            # 100% 안전한 테스트 내용 (HTML 태그 없음)
+            test_explanation = """## 뉴턴의 운동법칙
 
-**제1법칙: 관성의 법칙**
-외부 힘이 작용하지 않으면 물체는 정지 상태나 등속직선운동을 계속합니다.
+**정의**: 물체의 운동을 설명하는 기본 법칙들
 
-**제2법칙: 가속도의 법칙**
+**제1법칙**: 관성의 법칙
+물체는 외부 힘이 없으면 현재 상태를 유지합니다.
+
+**중요**: 정지한 물체는 계속 정지하고, 움직이는 물체는 계속 움직입니다.
+
+**제2법칙**: 가속도의 법칙
 F = ma
 
-<RED>중요: 힘과 가속도는 비례관계입니다</RED>
+**예시**: 무거운 물체일수록 더 큰 힘이 필요합니다.
 
-<BLUE>예: 자동차 급정거 시 승객이 앞으로 쏠리는 현상</BLUE>
+**제3법칙**: 작용-반작용의 법칙
 
-<U>결론: 뉴턴 법칙은 모든 운동의 기초입니다</U>"""
+**결론**: 이 세 법칙이 모든 운동의 기초가 됩니다."""
             
             st.session_state.current_explanation = test_explanation
-            st.success("🎉 테스트 수업이 준비되었습니다!")
+            st.success("🎉 100% 안전한 테스트 수업이 준비되었습니다!")
             st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -721,8 +742,9 @@ def process_question(question):
                 'timestamp': datetime.now()
             })
             
-            # 칠판 설명 내용으로 설정
-            st.session_state.current_explanation = format_for_blackboard(ai_response)
+            # 칠판 설명 내용으로 변환 (안전하게)
+            formatted_response = format_for_blackboard(ai_response)
+            st.session_state.current_explanation = formatted_response
             
             st.success("✅ AI 답변이 준비되었습니다! 칠판의 '수업 시작' 버튼을 눌러주세요!")
             
@@ -731,9 +753,10 @@ def process_question(question):
             
     except Exception as e:
         st.error(f"처리 중 오류: {str(e)}")
+        st.exception(e)
 
 def format_for_blackboard(response):
-    """AI 응답을 칠판 형식으로 변환 - 안전한 버전"""
+    """AI 응답을 칠판 형식으로 변환 - 매우 안전한 버전"""
     lines = response.split('\n')
     formatted = ""
     
@@ -743,44 +766,58 @@ def format_for_blackboard(response):
             formatted += "\n"
             continue
         
-        # 제목 감지 (더 정확하게)
+        # 기존 HTML 태그 완전 제거
+        line = re.sub(r'<[^>]+>', '', line)
+        
+        # 제목 감지 (## 형태로만)
         if any(keyword in line for keyword in ['에 대해', '란 무엇', '이란 무엇', '개념', '원리', '법칙', '정의']) and len(line) < 60:
-            formatted += f"## {line.replace('에 대해', '').replace('란 무엇인가', '').replace('이란 무엇인가', '').strip()}\n\n"
+            clean_title = line.replace('에 대해', '').replace('란 무엇인가', '').replace('이란 무엇인가', '').strip()
+            formatted += f"## {clean_title}\n\n"
             continue
         
-        # 정의/개념 감지
+        # 정의/개념 감지 (**텍스트** 형태로만)
         if '정의:' in line or '개념:' in line or line.endswith('란') or line.endswith('이란'):
             formatted += f"**{line}**\n\n"
             continue
         
-        # 공식 감지 (단순하게)
-        if '=' in line and len(line) < 50 and any(char in line for char in ['F', 'E', 'V', 'P', 'a', 'm', 'c']):
-            formatted += f"{line}\n\n"
-            continue
+        # 공식 감지 (단순한 등식만)
+        if '=' in line and len(line) < 50:
+            # 간단한 등식인지 확인
+            if re.match(r'^[A-Za-z]+\s*=\s*[A-Za-z0-9\s\+\-\*\/]+
+
+if __name__ == "__main__":
+    main(), line.strip()):
+                formatted += f"{line}\n\n"
+                continue
         
-        # 중요사항 감지
+        # 중요사항 감지 (안전한 태그)
         if any(keyword in line for keyword in ['중요', '핵심', '주의', '반드시', '꼭', '절대']):
-            formatted += f"<RED>{line}</RED>\n\n"
+            # < > 문자를 안전하게 처리
+            safe_line = line.replace('<', '').replace('>', '')
+            formatted += f"RED>{safe_line}RED>\n\n"
             continue
         
-        # 예시 감지
+        # 예시 감지 (안전한 태그)
         if line.startswith('예:') or line.startswith('예시:') or '예를 들어' in line[:20]:
-            formatted += f"<BLUE>{line}</BLUE>\n\n"
+            safe_line = line.replace('<', '').replace('>', '')
+            formatted += f"BLUE>{safe_line}BLUE>\n\n"
             continue
         
-        # 결론 감지
+        # 결론 감지 (안전한 태그)
         if any(keyword in line[:15] for keyword in ['결론', '따라서', '그러므로', '정리하면']):
-            formatted += f"<U>{line}</U>\n\n"
+            safe_line = line.replace('<', '').replace('>', '')
+            formatted += f"U>{safe_line}U>\n\n"
             continue
         
-        # 단계별 설명
+        # 단계별 설명 (**텍스트** 형태로만)
         if re.match(r'^\d+[.)]\s*', line) or '단계' in line[:10]:
             formatted += f"**{line}**\n"
             continue
         
-        # 일반 텍스트
+        # 일반 텍스트 (< > 문자 제거)
         if len(line) > 3:
-            formatted += f"{line}\n"
+            safe_line = line.replace('<', '').replace('>', '')
+            formatted += f"{safe_line}\n"
     
     # 빈 줄 정리
     formatted = re.sub(r'\n{3,}', '\n\n', formatted)
