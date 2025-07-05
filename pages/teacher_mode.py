@@ -733,7 +733,7 @@ def process_question(question):
         st.error(f"처리 중 오류: {str(e)}")
 
 def format_for_blackboard(response):
-    """AI 응답을 칠판 형식으로 변환"""
+    """AI 응답을 칠판 형식으로 변환 - 안전한 버전"""
     lines = response.split('\n')
     formatted = ""
     
@@ -743,40 +743,49 @@ def format_for_blackboard(response):
             formatted += "\n"
             continue
         
-        # 제목 감지
-        if any(keyword in line for keyword in ['에 대해', '란', '이란', '개념', '원리', '법칙']) and len(line) < 60:
-            formatted += f"## {line}\n\n"
+        # 제목 감지 (더 정확하게)
+        if any(keyword in line for keyword in ['에 대해', '란 무엇', '이란 무엇', '개념', '원리', '법칙', '정의']) and len(line) < 60:
+            formatted += f"## {line.replace('에 대해', '').replace('란 무엇인가', '').replace('이란 무엇인가', '').strip()}\n\n"
             continue
         
-        # 정의 감지
-        if '정의:' in line or '개념:' in line:
-            formatted += f"**{line}**\n"
+        # 정의/개념 감지
+        if '정의:' in line or '개념:' in line or line.endswith('란') or line.endswith('이란'):
+            formatted += f"**{line}**\n\n"
             continue
         
-        # 공식 감지
-        if '=' in line and any(char in line for char in ['²', '³', '+', '-', '*', '/']):
+        # 공식 감지 (단순하게)
+        if '=' in line and len(line) < 50 and any(char in line for char in ['F', 'E', 'V', 'P', 'a', 'm', 'c']):
             formatted += f"{line}\n\n"
             continue
         
         # 중요사항 감지
-        if any(keyword in line for keyword in ['중요', '핵심', '주의', '반드시']):
+        if any(keyword in line for keyword in ['중요', '핵심', '주의', '반드시', '꼭', '절대']):
             formatted += f"<RED>{line}</RED>\n\n"
             continue
         
         # 예시 감지
-        if '예:' in line or '예시:' in line or '예를 들어' in line:
+        if line.startswith('예:') or line.startswith('예시:') or '예를 들어' in line[:20]:
             formatted += f"<BLUE>{line}</BLUE>\n\n"
             continue
         
         # 결론 감지
-        if '결론' in line or '따라서' in line:
+        if any(keyword in line[:15] for keyword in ['결론', '따라서', '그러므로', '정리하면']):
             formatted += f"<U>{line}</U>\n\n"
             continue
         
+        # 단계별 설명
+        if re.match(r'^\d+[.)]\s*', line) or '단계' in line[:10]:
+            formatted += f"**{line}**\n"
+            continue
+        
         # 일반 텍스트
-        formatted += f"{line}\n"
+        if len(line) > 3:
+            formatted += f"{line}\n"
     
-    return formatted
+    # 빈 줄 정리
+    formatted = re.sub(r'\n{3,}', '\n\n', formatted)
+    
+    return formatted.strip()
 
 if __name__ == "__main__":
     main()
