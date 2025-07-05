@@ -4,85 +4,18 @@ import time
 from datetime import datetime
 import re
 
-# --- [1] CSS 스타일 완전 적용 (반드시 누락 없이 삽입) ---
+# --- CSS 스타일(풀버전, 누락X) ---
 st.markdown("""
 <style>
-.teacher-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 15px;
-    border-radius: 10px;
-    text-align: center;
-    color: white;
-    margin-bottom: 20px;
-}
-.blackboard {
-    background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%);
-    color: #ffffff;
-    padding: 30px;
-    border-radius: 15px;
-    font-family: 'NotoSansKR', 'Georgia', serif;
-    font-size: 18px;
-    line-height: 1.8;
-    height: 400px;
-    border: 8px solid #8B4513;
-    box-shadow: 
-        inset 0 0 30px rgba(0,0,0,0.3),
-        0 10px 20px rgba(0,0,0,0.2);
-    overflow-y: auto;
-    white-space: pre-wrap;
-    position: relative;
-    scroll-behavior: smooth;
-}
-.blackboard h1, .blackboard h2, .blackboard h3 {
-    color: #FFD700;
-    text-decoration: underline;
-    margin: 25px 0 15px 0;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-}
-.blackboard .important {
-    background: #FFD700;
-    color: #000;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-weight: bold;
-    box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-.blackboard .formula {
-    background: linear-gradient(135deg, #4169E1, #6495ED);
-    color: white;
-    padding: 15px;
-    border-radius: 10px;
-    font-size: 20px;
-    text-align: center;
-    margin: 15px 0;
-    border-left: 6px solid #FFD700;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    font-family: 'Courier New', monospace;
-}
-.blackboard .highlight-red {
-    color: #FF6B6B;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-}
-.blackboard .highlight-blue {
-    color: #4DABF7;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-}
-.blackboard .highlight-green {
-    color: #51CF66;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-}
-.blackboard .circle {
-    border: 3px solid #FFD700;
-    border-radius: 50%;
-    padding: 8px 15px;
-    display: inline-block;
-    margin: 5px;
-    background: rgba(255, 215, 0, 0.1);
-    box-shadow: 0 3px 8px rgba(0,0,0,0.3);
-}
+.teacher-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 10px; text-align: center; color: white; margin-bottom: 20px;}
+.blackboard { background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%); color: #ffffff; padding: 30px; border-radius: 15px; font-family: 'NotoSansKR', 'Georgia', serif; font-size: 18px; line-height: 1.8; height: 450px; border: 8px solid #8B4513; box-shadow: inset 0 0 30px rgba(0,0,0,0.3), 0 10px 20px rgba(0,0,0,0.2); overflow-y: auto; white-space: pre-wrap; position: relative; scroll-behavior: smooth;}
+.blackboard h1, .blackboard h2, .blackboard h3 { color: #FFD700; text-decoration: underline; margin: 25px 0 15px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);}
+.blackboard .important { background: #FFD700; color: #000; padding: 3px 8px; border-radius: 5px; font-weight: bold; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);}
+.blackboard .formula { background: linear-gradient(135deg, #4169E1, #6495ED); color: white; padding: 15px; border-radius: 10px; font-size: 20px; text-align: center; margin: 15px 0; border-left: 6px solid #FFD700; box-shadow: 0 5px 15px rgba(0,0,0,0.3); font-family: 'Courier New', monospace;}
+.blackboard .highlight-red { color: #FF6B6B; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);}
+.blackboard .highlight-blue { color: #4DABF7; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);}
+.blackboard .highlight-green { color: #51CF66; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);}
+.blackboard .circle { border: 3px solid #FFD700; border-radius: 50%; padding: 8px 15px; display: inline-block; margin: 5px; background: rgba(255, 215, 0, 0.1); box-shadow: 0 3px 8px rgba(0,0,0,0.3);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,7 +26,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- [2] Claude API 함수 ---
+# --- Claude API ---
 def get_claude_response(user_message, system_prompt, chat_history):
     try:
         from anthropic import Anthropic
@@ -117,7 +50,7 @@ def get_claude_response(user_message, system_prompt, chat_history):
     except Exception as e:
         return f"오류가 발생했습니다: {str(e)}"
 
-# --- [3] 시스템 프롬프트 ---
+# --- 시스템 프롬프트 ---
 def generate_system_prompt(teacher_config):
     personality = teacher_config.get('personality', {})
     natural_speech_level = personality.get('natural_speech', 70)
@@ -175,7 +108,7 @@ def generate_system_prompt(teacher_config):
 
 학생들에게 도움이 되는 교육적이고 참여도 높은 답변을 해주세요."""
 
-# --- [4] 칠판 텍스트 포맷 ---
+# --- 칠판 포맷 ---
 def format_blackboard_text(text):
     text = re.sub(r'\$\$([^$]+)\$\$', r'<div class="formula" style="font-size: 24px; margin: 20px 0;">\1</div>', text)
     text = re.sub(r'\$([^$]+)\$', r'<div class="formula">\1</div>', text)
@@ -190,7 +123,7 @@ def format_blackboard_text(text):
     text = re.sub(r'📋\s*([^\n]+)', r'<div style="background: rgba(81,207,102,0.2); padding: 10px; border-left: 4px solid #51CF66; margin: 10px 0;">📋 \1</div>', text)
     return text
 
-# --- [5] 칠판+타이핑+음성+EQ 콤보 컴포넌트 ---
+# --- 칠판+타이핑+음성+이퀄라이저 콤보 ---
 def blackboard_tts_typing_combo(text, speed=1.0, pitch=1.0):
     clean_text = re.sub(r'\[.*?\]', '', text).replace('\n', ' ').replace('"', '').replace("'", '')[:400]
     safe_text = clean_text.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
@@ -268,7 +201,7 @@ def blackboard_tts_typing_combo(text, speed=1.0, pitch=1.0):
     """
     return html
 
-# --- [6] 세션 초기화 ---
+# --- 세션 초기화 ---
 def initialize_teacher():
     if 'selected_teacher' not in st.session_state:
         st.error("AI 튜터가 선택되지 않았습니다. 메인 페이지로 돌아가세요.")
@@ -284,7 +217,7 @@ def initialize_teacher():
         st.session_state.is_recording = False
     return teacher
 
-# --- [7] 메인 ---
+# --- 메인 ---
 def main():
     teacher = initialize_teacher()
     if not teacher:
@@ -296,26 +229,66 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 칠판 표시
-    if st.session_state.blackboard_content:
-        st.markdown(f'''
-        <div class="blackboard">
-            <h2>📚 AI 칠판</h2>
-            <div>{format_blackboard_text(st.session_state.blackboard_content)}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    else:
-        st.markdown('''
-        <div class="blackboard">
-            <h2>📚 AI 칠판</h2>
-            <div style="text-align: center; color: #ccc; margin-top: 50px;">
-                칠판이 비어있습니다.<br>
-                질문을 입력하면 AI가 여기에 설명을 써드립니다.
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.subheader("📋 AI 칠판")
+        if st.session_state.blackboard_content:
+            st.markdown(f'''
+            <div class="blackboard">
+                <h2>📚 AI 칠판</h2>
+                <div>{format_blackboard_text(st.session_state.blackboard_content)}</div>
             </div>
-        </div>
-        ''', unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
+        else:
+            st.markdown('''
+            <div class="blackboard">
+                <h2>📚 AI 칠판</h2>
+                <div style="text-align: center; color: #ccc; margin-top: 50px;">
+                    칠판이 비어있습니다.<br>
+                    질문을 입력하면 AI가 여기에 설명을 써드립니다.
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
 
-    # 콤보 컴포넌트
+    with col2:
+        st.subheader("💬 텍스트 입력")
+        user_text = st.text_input("질문을 입력하세요:", key="text_input", placeholder="예: 전자기 유도에 대해 설명해주세요")
+        if st.button("📝 텍스트 전송", key="send_text"):
+            if user_text:
+                process_text_input(user_text)
+                st.rerun()
+
+        st.subheader("🎯 빠른 질문")
+        quick_questions = [
+            "기본 개념 설명해주세요",
+            "실생활 예시를 들어주세요",
+            "공식이나 법칙을 알려주세요",
+            "연습 문제를 내주세요"
+        ]
+        for i, question in enumerate(quick_questions):
+            if st.button(question, key=f"quick_{i}"):
+                process_text_input(question)
+                st.rerun()
+        st.subheader("🔊 음성 설정")
+        with st.expander("설정 조절"):
+            voice_speed = st.slider("음성 속도", 0.5, 2.0, teacher.get('voice_settings', {}).get('speed', 1.0), 0.1)
+            voice_pitch = st.slider("음성 높이", 0.5, 2.0, teacher.get('voice_settings', {}).get('pitch', 1.0), 0.1)
+        st.subheader("💬 대화 기록")
+        chat_container = st.container()
+        with chat_container:
+            if st.session_state.chat_history:
+                chat_html = '<div class="chat-container">'
+                for message in st.session_state.chat_history[-5:]:
+                    if message['role'] == 'user':
+                        chat_html += f'<div class="user-message">👤 {message["content"]}</div>'
+                    else:
+                        chat_html += f'<div class="ai-message">🤖 {message["content"]}</div>'
+                chat_html += '</div>'
+                st.markdown(chat_html, unsafe_allow_html=True)
+            else:
+                st.info("아직 대화가 없습니다. 마이크 버튼을 눌러 시작해보세요!")
+
+    # 새 응답이 생성될 때마다 아래 컴포넌트가 뜨도록
     if 'latest_ai_response' in st.session_state and st.session_state.latest_ai_response:
         st.components.v1.html(
             blackboard_tts_typing_combo(
@@ -325,14 +298,7 @@ def main():
             ), height=340
         )
 
-    # 텍스트 입력
-    user_text = st.text_input("질문을 입력하세요:", key="text_input", placeholder="예: 전자기 유도에 대해 설명해주세요")
-    if st.button("📝 텍스트 전송", key="send_text"):
-        if user_text:
-            process_text_input(user_text)
-            st.rerun()
-
-# --- [8] 입력 및 응답 핸들러 ---
+# --- 입력 및 응답 핸들러 ---
 def process_text_input(user_input):
     try:
         if user_input:
@@ -415,6 +381,5 @@ def format_response_for_blackboard(response):
         formatted += f"\n{'─'*50}\n"
     return formatted
 
-# --- [9] 앱 시작 ---
 if __name__ == "__main__":
     main()
