@@ -110,9 +110,9 @@ def format_blackboard_text(text):
     
     return text
 
-# 🔊 새로운 TTS 함수 - 전광판 효과 포함 (문법 오류 수정)
+# 🔊 새로운 TTS 함수 - 전광판 효과 포함
 def play_immediate_tts(text, voice_settings=None):
-    """확실히 작동하는 TTS with 전광판 효과 - 문법 수정 버전"""
+    """확실히 작동하는 TTS with 전광판 효과"""
     if voice_settings is None:
         voice_settings = {'speed': 1.0, 'pitch': 1.0}
     
@@ -124,210 +124,8 @@ def play_immediate_tts(text, voice_settings=None):
     speed = voice_settings.get('speed', 1.0)
     pitch = voice_settings.get('pitch', 1.0)
     
-    # JavaScript 코드를 별도 문자열로 분리 (f-string 충돌 방지)
-    js_code = """
-    // 전역 변수
-    let ttsUtterance = null;
-    let isVoicePlaying = false;
-    let voiceSpeed = """ + str(speed) + """;
-    let voicePitch = """ + str(pitch) + """;
-    let fullText = '""" + clean_text.replace("'", "\\'") + """';
-    
-    // LED 디스플레이 업데이트
-    function updateLED(message, isScrolling = false) {
-        const ledText = document.getElementById('led-text');
-        if (ledText) {
-            ledText.textContent = message;
-            if (isScrolling) {
-                ledText.classList.add('led-scrolling');
-            } else {
-                ledText.classList.remove('led-scrolling');
-            }
-        }
-    }
-    
-    // 상태 업데이트
-    function updateStatus(message) {
-        const status = document.getElementById('voice-status');
-        if (status) status.textContent = message;
-    }
-    
-    // 음성 파형 표시/숨김
-    function toggleWave(show) {
-        const wave = document.getElementById('voice-wave');
-        if (wave) {
-            wave.style.display = show ? 'block' : 'none';
-        }
-    }
-    
-    // 컨테이너 효과
-    function setContainerEffect(effect) {
-        const container = document.getElementById('tts-container');
-        if (container) {
-            container.className = effect;
-        }
-    }
-    
-    // 음성 재생 함수
-    function playVoiceNow() {
-        try {
-            console.log('TTS 재생 시작:', fullText.substring(0, 50));
-            
-            // 기존 음성 정지
-            speechSynthesis.cancel();
-            isVoicePlaying = false;
-            
-            // LED 업데이트
-            updateLED('🔊 음성 재생 시작...', true);
-            updateStatus('음성 엔진 초기화 중...');
-            
-            // 새 음성 생성
-            ttsUtterance = new SpeechSynthesisUtterance(fullText);
-            
-            // 음성 설정
-            ttsUtterance.lang = 'ko-KR';
-            ttsUtterance.rate = voiceSpeed;
-            ttsUtterance.pitch = voicePitch;
-            ttsUtterance.volume = 1.0;
-            
-            // 이벤트 핸들러
-            ttsUtterance.onstart = function() {
-                isVoicePlaying = true;
-                updateLED('🎤 AI 선생님이 말하고 있습니다...', false);
-                updateStatus('🔊 재생 중... (속도: ' + Math.round(voiceSpeed * 100) + '%)');
-                toggleWave(true);
-                setContainerEffect('voice-active');
-                
-                // 버튼 상태 변경
-                const playBtn = document.getElementById('play-btn');
-                if (playBtn) {
-                    playBtn.textContent = '🔊 재생 중...';
-                    playBtn.style.background = '#FFC107';
-                }
-                
-                console.log('TTS 재생 시작됨');
-            };
-            
-            ttsUtterance.onend = function() {
-                isVoicePlaying = false;
-                updateLED('✅ 음성 재생 완료!', false);
-                updateStatus('재생 완료! 다시 들으시려면 "다시 듣기"를 눌러주세요.');
-                toggleWave(false);
-                setContainerEffect('');
-                
-                // 버튼 상태 복원
-                const playBtn = document.getElementById('play-btn');
-                if (playBtn) {
-                    playBtn.textContent = '🔊 음성 재생';
-                    playBtn.style.background = '#4CAF50';
-                }
-                
-                console.log('TTS 재생 완료');
-            };
-            
-            ttsUtterance.onerror = function(event) {
-                isVoicePlaying = false;
-                updateLED('❌ 음성 재생 오류', false);
-                updateStatus('오류: ' + event.error + ' - 다시 시도해주세요.');
-                toggleWave(false);
-                setContainerEffect('');
-                console.error('TTS 오류:', event.error, event);
-            };
-            
-            // 한국어 음성 찾기 및 설정
-            const voices = speechSynthesis.getVoices();
-            console.log('사용 가능한 음성 수:', voices.length);
-            
-            const koreanVoices = voices.filter(voice => 
-                voice.lang && (
-                    voice.lang.toLowerCase().includes('ko') || 
-                    voice.name.toLowerCase().includes('korean') ||
-                    voice.name.includes('한국')
-                )
-            );
-            
-            if (koreanVoices.length > 0) {
-                ttsUtterance.voice = koreanVoices[0];
-                updateStatus('🎯 한국어 음성: ' + koreanVoices[0].name);
-                console.log('한국어 음성 사용:', koreanVoices[0].name);
-            } else {
-                updateStatus('⚠️ 기본 음성 사용 (한국어 음성 없음)');
-                console.log('한국어 음성 없음');
-            }
-            
-            // 음성 재생
-            speechSynthesis.speak(ttsUtterance);
-            
-        } catch (error) {
-            updateLED('❌ JavaScript 오류', false);
-            updateStatus('오류: ' + error.message);
-            console.error('TTS JavaScript 오류:', error);
-        }
-    }
-    
-    // 음성 정지
-    function stopVoiceNow() {
-        speechSynthesis.cancel();
-        isVoicePlaying = false;
-        updateLED('🛑 음성 재생 정지됨', false);
-        updateStatus('재생이 정지되었습니다.');
-        toggleWave(false);
-        setContainerEffect('');
-        
-        const playBtn = document.getElementById('play-btn');
-        if (playBtn) {
-            playBtn.textContent = '🔊 음성 재생';
-            playBtn.style.background = '#4CAF50';
-        }
-        
-        console.log('TTS 정지됨');
-    }
-    
-    // 다시 듣기
-    function replayVoice() {
-        stopVoiceNow();
-        setTimeout(playVoiceNow, 500);
-    }
-    
-    // 초기화 및 자동 재생
-    function initializeTTS() {
-        const voices = speechSynthesis.getVoices();
-        if (voices.length > 0) {
-            updateLED('🚀 시스템 준비 완료', false);
-            updateStatus('음성 시스템 준비됨. 자동 재생 시작...');
-            console.log('TTS 시스템 초기화 완료');
-            
-            // 2초 후 자동 재생
-            setTimeout(function() {
-                if (!isVoicePlaying) {
-                    playVoiceNow();
-                }
-            }, 2000);
-        } else {
-            updateLED('⏳ 음성 엔진 로딩 중...', true);
-            updateStatus('음성 엔진을 불러오는 중입니다...');
-            console.log('음성 엔진 로딩 중');
-        }
-    }
-    
-    // 음성 목록 로드 대기
-    if (speechSynthesis.getVoices().length > 0) {
-        initializeTTS();
-    } else {
-        speechSynthesis.onvoiceschanged = initializeTTS;
-    }
-    
-    // 5초 후에도 자동 재생 안되면 수동 안내
-    setTimeout(function() {
-        if (!isVoicePlaying) {
-            updateLED('🔽 수동으로 "음성 재생" 버튼을 눌러주세요', false);
-            updateStatus('자동 재생이 안 되면 수동으로 버튼을 눌러주세요.');
-        }
-    }, 5000);
-    """
-    
-    # 전광판 효과가 있는 TTS HTML (f-string 사용하지 않음)
-    tts_html = """
+    # 전광판 효과가 있는 TTS HTML
+    tts_html = f"""
     <div id="tts-container" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin: 20px 0; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
         
         <!-- 전광판 헤더 -->
@@ -370,37 +168,234 @@ def play_immediate_tts(text, voice_settings=None):
         
         <!-- 텍스트 미리보기 -->
         <div id="text-preview" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 14px; max-height: 100px; overflow-y: auto;">
-            """ + f'"{clean_text[:150]}{"..." if len(clean_text) > 150 else ""}"' + """
+            "{clean_text[:150]}{'...' if len(clean_text) > 150 else ''}"
         </div>
     </div>
     
     <style>
-    @keyframes wave {
-        0%, 40%, 100% { transform: scaleY(0.4); }
-        20% { transform: scaleY(1.0); }
-    }
+    @keyframes wave {{
+        0%, 40%, 100% {{ transform: scaleY(0.4); }}
+        20% {{ transform: scaleY(1.0); }}
+    }}
     
-    @keyframes blink {
-        0%, 50% { opacity: 1; }
-        51%, 100% { opacity: 0.3; }
-    }
+    @keyframes blink {{
+        0%, 50% {{ opacity: 1; }}
+        51%, 100% {{ opacity: 0.3; }}
+    }}
     
-    @keyframes led-scroll {
-        0% { transform: translateX(100%); }
-        100% { transform: translateX(-100%); }
-    }
+    @keyframes led-scroll {{
+        0% {{ transform: translateX(100%); }}
+        100% {{ transform: translateX(-100%); }}
+    }}
     
-    .led-scrolling {
+    .led-scrolling {{
         animation: led-scroll 10s linear infinite;
-    }
+    }}
     
-    .voice-active {
+    .voice-active {{
         animation: blink 0.8s infinite;
-    }
+    }}
     </style>
     
     <script>
-    """ + js_code + """
+    // 전역 변수
+    let ttsUtterance = null;
+    let isVoicePlaying = false;
+    let voiceSpeed = {speed};
+    let voicePitch = {pitch};
+    let fullText = `{clean_text}`;
+    
+    // LED 디스플레이 업데이트
+    function updateLED(message, isScrolling = false) {{
+        const ledText = document.getElementById('led-text');
+        if (ledText) {{
+            ledText.textContent = message;
+            if (isScrolling) {{
+                ledText.classList.add('led-scrolling');
+            }} else {{
+                ledText.classList.remove('led-scrolling');
+            }}
+        }}
+    }}
+    
+    // 상태 업데이트
+    function updateStatus(message) {{
+        const status = document.getElementById('voice-status');
+        if (status) status.textContent = message;
+    }}
+    
+    // 음성 파형 표시/숨김
+    function toggleWave(show) {{
+        const wave = document.getElementById('voice-wave');
+        if (wave) {{
+            wave.style.display = show ? 'block' : 'none';
+        }}
+    }}
+    
+    // 컨테이너 효과
+    function setContainerEffect(effect) {{
+        const container = document.getElementById('tts-container');
+        if (container) {{
+            container.className = effect;
+        }}
+    }}
+    
+    // 음성 재생 함수
+    function playVoiceNow() {{
+        try {{
+            console.log('TTS 재생 시작:', fullText.substring(0, 50));
+            
+            // 기존 음성 정지
+            speechSynthesis.cancel();
+            isVoicePlaying = false;
+            
+            // LED 업데이트
+            updateLED('🔊 음성 재생 시작...', true);
+            updateStatus('음성 엔진 초기화 중...');
+            
+            // 새 음성 생성
+            ttsUtterance = new SpeechSynthesisUtterance(fullText);
+            
+            // 음성 설정
+            ttsUtterance.lang = 'ko-KR';
+            ttsUtterance.rate = voiceSpeed;
+            ttsUtterance.pitch = voicePitch;
+            ttsUtterance.volume = 1.0;
+            
+            // 이벤트 핸들러
+            ttsUtterance.onstart = function() {{
+                isVoicePlaying = true;
+                updateLED('🎤 AI 선생님이 말하고 있습니다...', false);
+                updateStatus(`🔊 재생 중... (속도: ${{Math.round(voiceSpeed * 100)}}%)`)
+                toggleWave(true);
+                setContainerEffect('voice-active');
+                
+                // 버튼 상태 변경
+                const playBtn = document.getElementById('play-btn');
+                if (playBtn) {{
+                    playBtn.textContent = '🔊 재생 중...';
+                    playBtn.style.background = '#FFC107';
+                }}
+                
+                console.log('TTS 재생 시작됨');
+            }};
+            
+            ttsUtterance.onend = function() {{
+                isVoicePlaying = false;
+                updateLED('✅ 음성 재생 완료!', false);
+                updateStatus('재생 완료! 다시 들으시려면 "다시 듣기"를 눌러주세요.');
+                toggleWave(false);
+                setContainerEffect('');
+                
+                // 버튼 상태 복원
+                const playBtn = document.getElementById('play-btn');
+                if (playBtn) {{
+                    playBtn.textContent = '🔊 음성 재생';
+                    playBtn.style.background = '#4CAF50';
+                }}
+                
+                console.log('TTS 재생 완료');
+            }};
+            
+            ttsUtterance.onerror = function(event) {{
+                isVoicePlaying = false;
+                updateLED('❌ 음성 재생 오류', false);
+                updateStatus('오류: ' + event.error + ' - 다시 시도해주세요.');
+                toggleWave(false);
+                setContainerEffect('');
+                console.error('TTS 오류:', event.error, event);
+            }};
+            
+            // 한국어 음성 찾기 및 설정
+            const voices = speechSynthesis.getVoices();
+            console.log('사용 가능한 음성 수:', voices.length);
+            
+            const koreanVoices = voices.filter(voice => 
+                voice.lang && (
+                    voice.lang.toLowerCase().includes('ko') || 
+                    voice.name.toLowerCase().includes('korean') ||
+                    voice.name.includes('한국')
+                )
+            );
+            
+            if (koreanVoices.length > 0) {{
+                ttsUtterance.voice = koreanVoices[0];
+                updateStatus('🎯 한국어 음성: ' + koreanVoices[0].name);
+                console.log('한국어 음성 사용:', koreanVoices[0].name);
+            }} else {{
+                updateStatus('⚠️ 기본 음성 사용 (한국어 음성 없음)');
+                console.log('한국어 음성 없음');
+            }}
+            
+            // 음성 재생
+            speechSynthesis.speak(ttsUtterance);
+            
+        }} catch (error) {{
+            updateLED('❌ JavaScript 오류', false);
+            updateStatus('오류: ' + error.message);
+            console.error('TTS JavaScript 오류:', error);
+        }}
+    }}
+    
+    // 음성 정지
+    function stopVoiceNow() {{
+        speechSynthesis.cancel();
+        isVoicePlaying = false;
+        updateLED('🛑 음성 재생 정지됨', false);
+        updateStatus('재생이 정지되었습니다.');
+        toggleWave(false);
+        setContainerEffect('');
+        
+        const playBtn = document.getElementById('play-btn');
+        if (playBtn) {{
+            playBtn.textContent = '🔊 음성 재생';
+            playBtn.style.background = '#4CAF50';
+        }}
+        
+        console.log('TTS 정지됨');
+    }}
+    
+    // 다시 듣기
+    function replayVoice() {{
+        stopVoiceNow();
+        setTimeout(playVoiceNow, 500);
+    }}
+    
+    // 초기화 및 자동 재생
+    function initializeTTS() {{
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {{
+            updateLED('🚀 시스템 준비 완료', false);
+            updateStatus('음성 시스템 준비됨. 자동 재생 시작...');
+            console.log('TTS 시스템 초기화 완료');
+            
+            // 2초 후 자동 재생
+            setTimeout(function() {{
+                if (!isVoicePlaying) {{
+                    playVoiceNow();
+                }}
+            }}, 2000);
+        }} else {{
+            updateLED('⏳ 음성 엔진 로딩 중...', true);
+            updateStatus('음성 엔진을 불러오는 중입니다...');
+            console.log('음성 엔진 로딩 중');
+        }}
+    }}
+    
+    // 음성 목록 로드 대기
+    if (speechSynthesis.getVoices().length > 0) {{
+        initializeTTS();
+    }} else {{
+        speechSynthesis.onvoiceschanged = initializeTTS;
+    }}
+    
+    // 5초 후에도 자동 재생 안되면 수동 안내
+    setTimeout(function() {{
+        if (!isVoicePlaying) {{
+            updateLED('🔽 수동으로 "음성 재생" 버튼을 눌러주세요', false);
+            updateStatus('자동 재생이 안 되면 수동으로 버튼을 눌러주세요.');
+        }}
+    }}, 5000);
     </script>
     """
     
@@ -627,29 +622,22 @@ def main():
     with col2:
         st.subheader("💬 질문하기")
         
-        # 동적 키를 사용한 텍스트 입력 (입력창 리셋용)
-        if 'input_counter' not in st.session_state:
-            st.session_state.input_counter = 0
+        # 텍스트 입력
+        user_text = st.text_area(
+            "질문을 입력하세요:", 
+            key="text_input", 
+            placeholder="예: 전자기 유도에 대해 설명해주세요",
+            height=100
+        )
         
-        # Form을 사용해서 안전하게 입력 처리
-        with st.form(key=f"question_form_{st.session_state.input_counter}"):
-            user_text = st.text_area(
-                "질문을 입력하세요:", 
-                placeholder="예: 전자기 유도에 대해 설명해주세요",
-                height=100,
-                key=f"text_input_{st.session_state.input_counter}"
-            )
-            
-            submit_button = st.form_submit_button("📝 질문 보내기", type="primary", use_container_width=True)
-            
-            if submit_button:
-                if user_text.strip():
-                    # 입력 카운터 증가 (입력창 자동 리셋)
-                    st.session_state.input_counter += 1
-                    process_text_input(user_text.strip())
-                    st.rerun()
-                else:
-                    st.warning("질문을 입력해주세요!")
+        if st.button("📝 질문 보내기", type="primary", use_container_width=True):
+            if user_text.strip():
+                process_text_input(user_text.strip())
+                # 입력창 비우기
+                st.session_state.text_input = ""
+                st.rerun()
+            else:
+                st.warning("질문을 입력해주세요!")
         
         # 빠른 질문 버튼들
         st.subheader("🎯 빠른 질문")
@@ -661,12 +649,7 @@ def main():
         ]
         
         for i, question in enumerate(quick_questions):
-            if st.button(question, key=f"quick_{i}_{st.session_state.get('quick_counter', 0)}"):
-                # 퀵 카운터 증가
-                if 'quick_counter' not in st.session_state:
-                    st.session_state.quick_counter = 0
-                st.session_state.quick_counter += 1
-                st.session_state.input_counter += 1
+            if st.button(question, key=f"quick_{i}"):
                 process_text_input(question)
                 st.rerun()
         
@@ -697,31 +680,29 @@ def main():
         
         with col1:
             st.subheader("📝 칠판 메모")
-            with st.form("memo_form"):
-                custom_text = st.text_area("추가할 내용:", key="memo_textarea")
-                if st.form_submit_button("📝 칠판에 메모 추가"):
-                    if custom_text:
-                        st.session_state.blackboard_content += f"\n\n📝 메모: {custom_text}"
-                        st.success("메모가 추가되었습니다!")
-                        st.rerun()
+            custom_text = st.text_area("추가할 내용:", key="memo_textarea")
+            if st.button("📝 칠판에 메모 추가", key="add_memo_btn"):
+                if custom_text:
+                    st.session_state.blackboard_content += f"\n\n📝 메모: {custom_text}"
+                    st.success("메모가 추가되었습니다!")
+                    st.rerun()
         
         with col2:
             st.subheader("🎯 주제 요청")
-            with st.form("topic_form"):
-                topic = st.text_input("학습하고 싶은 주제:", key="topic_input")
-                if st.form_submit_button("🎯 특정 주제 요청"):
-                    if topic:
-                        process_topic_request(topic)
-                        st.rerun()
+            topic = st.text_input("학습하고 싶은 주제:", key="topic_input")
+            if st.button("🎯 특정 주제 요청", key="request_topic_btn"):
+                if topic:
+                    process_topic_request(topic)
+                    st.rerun()
         
         with col3:
             st.subheader("💾 수업 저장")
             if st.button("💾 수업 내용 저장", key="save_lesson_btn"):
                 save_lesson_content()
 
-# 🔥 수정된 핵심 함수 - 안전한 세션 상태 처리
+# 🔥 수정된 핵심 함수 - 확실한 TTS 포함
 def process_text_input(user_input):
-    """텍스트 입력 처리 - 안전한 세션 상태 관리"""
+    """텍스트 입력 처리 - 확실한 TTS 포함"""
     try:
         if user_input:
             # 사용자 메시지 추가
@@ -770,7 +751,6 @@ def process_text_input(user_input):
                 
     except Exception as e:
         st.error(f"처리 중 오류: {str(e)}")
-        st.exception(e)
 
 def update_blackboard_with_response(response):
     """AI 응답을 칠판에 업데이트"""
