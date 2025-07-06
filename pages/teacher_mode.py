@@ -26,7 +26,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Claude API 응답 함수 (기존 코드 재사용)
+# Claude API 응답 함수
 def get_claude_response(user_message, system_prompt, chat_history):
     """Claude API 응답 생성"""
     try:
@@ -90,24 +90,55 @@ def generate_system_prompt(teacher_config):
 
 친근하고 격려하는 말투로 대화하세요."""
 
-def create_simple_interface(teacher_config):
-    """단순하고 실용적인 인터페이스"""
+def process_question(question, teacher):
+    """질문 처리 및 AI 응답 생성"""
+    try:
+        # 채팅 히스토리 초기화
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        
+        # 채팅 히스토리에 사용자 질문 추가
+        st.session_state.chat_history.append({
+            'role': 'user',
+            'content': question,
+            'timestamp': datetime.now()
+        })
+        
+        # AI 응답 생성
+        system_prompt = generate_system_prompt(teacher)
+        ai_response = get_claude_response(question, system_prompt, st.session_state.chat_history)
+        
+        if ai_response and "오류:" not in ai_response:
+            # AI 응답을 채팅 히스토리에 추가
+            st.session_state.chat_history.append({
+                'role': 'assistant',
+                'content': ai_response,
+                'timestamp': datetime.now()
+            })
+            
+            return ai_response
+        else:
+            return f"죄송합니다. 응답 생성 중 오류가 발생했습니다: {ai_response}"
+            
+    except Exception as e:
+        return f"처리 중 오류가 발생했습니다: {str(e)}"
+
+def create_ultra_simple_interface():
+    """가장 단순한 인터페이스"""
     
-    teacher_name = teacher_config.get('name', 'AI 튜터')
-    
-    html_code = f"""
+    html_code = """
     <div style="background: #f8f9fa; border-radius: 15px; padding: 20px; margin: 20px 0;">
         
-        <!-- 간단한 헤더 -->
+        <!-- 헤더 -->
         <div style="text-align: center; margin-bottom: 20px;">
-            <h3 style="color: #333; margin: 0;">🎓 {teacher_name} AI 튜터</h3>
-            <p style="color: #666; margin: 5px 0;">텍스트 또는 음성으로 질문하세요</p>
+            <h3 style="color: #333; margin: 0;">🎓 AI 튜터와 대화하기</h3>
+            <p style="color: #666; margin: 5px 0;">텍스트로 질문하고 음성으로 답변을 들어보세요</p>
         </div>
         
-        <!-- 텍스트 입력 영역 -->
+        <!-- 텍스트 입력 -->
         <div style="margin-bottom: 20px;">
-            <textarea id="text-input" 
-                      placeholder="여기에 질문을 입력하세요. 예: 뉴턴의 법칙에 대해 설명해주세요" 
+            <textarea id="question-input" 
+                      placeholder="질문을 입력하세요. 예: 뉴턴의 법칙에 대해 설명해주세요" 
                       style="width: 100%; 
                              height: 80px; 
                              padding: 15px; 
@@ -118,39 +149,26 @@ def create_simple_interface(teacher_config):
                              font-family: 'Malgun Gothic', sans-serif;"></textarea>
         </div>
         
-        <!-- 버튼들 -->
+        <!-- 버튼 -->
         <div style="text-align: center; margin-bottom: 20px;">
-            <button onclick="sendTextMessage()" 
+            <button onclick="askQuestion()" 
                     style="background: #28a745; 
                            color: white; 
                            border: none; 
-                           padding: 12px 30px; 
+                           padding: 15px 30px; 
                            border-radius: 25px; 
                            font-size: 16px; 
                            font-weight: bold; 
                            cursor: pointer; 
                            margin: 5px;">
-                📝 텍스트로 질문하기
+                📝 질문하기
             </button>
             
-            <button id="voice-btn" onclick="toggleVoice()" 
-                    style="background: #dc3545; 
-                           color: white; 
-                           border: none; 
-                           padding: 12px 30px; 
-                           border-radius: 25px; 
-                           font-size: 16px; 
-                           font-weight: bold; 
-                           cursor: pointer; 
-                           margin: 5px;">
-                🎤 음성으로 질문하기
-            </button>
-            
-            <button onclick="clearBoard()" 
+            <button onclick="clearAll()" 
                     style="background: #6c757d; 
                            color: white; 
                            border: none; 
-                           padding: 12px 30px; 
+                           padding: 15px 30px; 
                            border-radius: 25px; 
                            font-size: 16px; 
                            font-weight: bold; 
@@ -160,23 +178,23 @@ def create_simple_interface(teacher_config):
             </button>
         </div>
         
-        <!-- 상태 표시 -->
+        <!-- 상태 -->
         <div id="status" style="text-align: center; 
                                  margin: 15px 0; 
                                  padding: 10px; 
                                  background: #e7f3ff; 
                                  border-radius: 8px; 
                                  color: #0066cc;">
-            💡 질문을 입력하거나 음성 버튼을 눌러주세요
+            💡 위에 질문을 입력하고 "질문하기" 버튼을 눌러주세요
         </div>
         
-        <!-- 칠판 -->
+        <!-- 답변 영역 -->
         <div style="background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 100%); 
                     border: 4px solid #8B4513; 
                     border-radius: 15px; 
                     padding: 25px; 
-                    min-height: 400px; 
-                    max-height: 500px; 
+                    min-height: 300px; 
+                    max-height: 400px; 
                     overflow-y: auto;">
             
             <div style="text-align: center; 
@@ -186,18 +204,17 @@ def create_simple_interface(teacher_config):
                         margin-bottom: 20px; 
                         border-bottom: 2px solid #FFD700; 
                         padding-bottom: 10px;">
-                📋 AI 튜터 칠판
+                📋 AI 튜터 답변
             </div>
             
-            <div id="blackboard" 
+            <div id="answer-area" 
                  style="color: white; 
                         font-size: 16px; 
                         line-height: 1.6; 
                         font-family: 'Malgun Gothic', sans-serif;">
                 
                 <div style="text-align: center; color: #ccc; margin-top: 50px;">
-                    위의 텍스트 입력창에 질문을 입력하거나<br>
-                    🎤 버튼을 눌러 음성으로 질문해보세요!<br><br>
+                    질문을 입력하면 AI 튜터가 친근하게 답변해드려요! 😊<br><br>
                     
                     <div style="background: rgba(255,255,255,0.1); 
                                 padding: 15px; 
@@ -211,55 +228,69 @@ def create_simple_interface(teacher_config):
                 </div>
             </div>
         </div>
-        
-        <!-- 대화 기록 -->
-        <div id="chat-history" style="background: #fff; 
-                                      border: 1px solid #ddd; 
-                                      border-radius: 10px; 
-                                      padding: 15px; 
-                                      margin-top: 20px; 
-                                      max-height: 200px; 
-                                      overflow-y: auto;
-                                      display: none;">
-            <h4 style="margin-top: 0; color: #333;">📋 대화 기록</h4>
-            <div id="chat-content" style="font-size: 14px; color: #555;"></div>
-        </div>
     </div>
 
     <script>
-    let isRecording = false;
-    let mediaRecorder = null;
-    let audioStream = null;
-    let currentSpeech = null;
+    function askQuestion() {
+        const input = document.getElementById('question-input');
+        const question = input.value.trim();
+        
+        if (!question) {
+            updateStatus('❌ 질문을 입력해주세요!', 'error');
+            return;
+        }
+        
+        // 입력창 비우기
+        input.value = '';
+        
+        // 상태 업데이트
+        updateStatus('🤔 AI 튜터가 답변을 준비하고 있어요...', 'loading');
+        
+        // Streamlit으로 질문 전송 (실제 구현 필요)
+        // 지금은 페이지 새로고침으로 Streamlit 처리
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        const hiddenField = document.createElement('input');
+        hiddenField.type = 'hidden';
+        hiddenField.name = 'user_question';
+        hiddenField.value = question;
+        
+        form.appendChild(hiddenField);
+        document.body.appendChild(form);
+        
+        // Streamlit에서 처리하도록 세션 스토리지 사용
+        sessionStorage.setItem('pending_question', question);
+        window.location.reload();
+    }
     
-    // 상태 업데이트
-    function updateStatus(message, type = 'info') {{
+    function updateStatus(message, type) {
         const statusEl = document.getElementById('status');
         if (!statusEl) return;
         
         let bgColor = '#e7f3ff';
         let textColor = '#0066cc';
         
-        if (type === 'success') {{
-            bgColor = '#d4edda';
-            textColor = '#155724';
-        }} else if (type === 'error') {{
+        if (type === 'error') {
             bgColor = '#f8d7da';
             textColor = '#721c24';
-        }} else if (type === 'warning') {{
+        } else if (type === 'loading') {
             bgColor = '#fff3cd';
             textColor = '#856404';
-        }}
+        } else if (type === 'success') {
+            bgColor = '#d4edda';
+            textColor = '#155724';
+        }
         
         statusEl.style.background = bgColor;
         statusEl.style.color = textColor;
         statusEl.innerHTML = message;
-    }}
+    }
     
-    // 칠판 업데이트 (스크롤 수정)
-    function updateBlackboard(content) {{
-        const board = document.getElementById('blackboard');
-        if (!board) return;
+    function updateAnswer(content) {
+        const answerArea = document.getElementById('answer-area');
+        if (!answerArea) return;
         
         // 간단한 포맷팅
         let formatted = content
@@ -269,306 +300,37 @@ def create_simple_interface(teacher_config):
             .replace(/\\[예시\\]([^\\n]+)/g, '<div style="color: #4DABF7; font-weight: bold; margin: 10px 0; padding: 8px; background: rgba(77,171,247,0.2); border-radius: 5px;">🔵 $1</div>')
             .replace(/\\n/g, '<br>');
         
-        board.innerHTML = formatted;
-        
-        // 스크롤을 맨 아래로 (수정됨)
-        board.scrollTop = board.scrollHeight;
-    }}
+        answerArea.innerHTML = formatted;
+        answerArea.scrollTop = answerArea.scrollHeight;
+    }
     
-    // 채팅 기록 추가
-    function addToChatHistory(speaker, message) {{
-        const chatContent = document.getElementById('chat-content');
-        const chatHistory = document.getElementById('chat-history');
+    function clearAll() {
+        const input = document.getElementById('question-input');
+        const answerArea = document.getElementById('answer-area');
         
-        if (!chatContent || !chatHistory) return;
+        if (input) input.value = '';
+        if (answerArea) {
+            answerArea.innerHTML = '<div style="text-align: center; color: #ccc; margin-top: 50px;">답변 영역이 지워졌습니다.<br>새로운 질문을 해주세요! 😊</div>';
+        }
         
-        const time = new Date().toLocaleTimeString();
-        const chatItem = document.createElement('div');
-        chatItem.style.cssText = 'margin: 8px 0; padding: 8px; background: #f8f9fa; border-radius: 5px; border-left: 3px solid #007bff;';
-        chatItem.innerHTML = `<strong>[${time}] ${speaker}:</strong> ${message}`;
+        updateStatus('🗑️ 모든 내용을 지웠어요!', 'success');
         
-        chatContent.appendChild(chatItem);
-        chatHistory.style.display = 'block';
-        chatContent.scrollTop = chatContent.scrollHeight;
-    }}
+        // 세션 스토리지도 정리
+        sessionStorage.removeItem('pending_question');
+    }
     
-    // 텍스트 메시지 전송
-    async function sendTextMessage() {{
-        const textInput = document.getElementById('text-input');
-        if (!textInput) return;
-        
-        const message = textInput.value.trim();
-        if (!message) {{
-            updateStatus('❌ 질문을 입력해주세요!', 'error');
-            return;
-        }}
-        
-        // 입력창 비우기
-        textInput.value = '';
-        
-        // 처리 중 표시
-        updateStatus('🤔 AI가 답변을 준비하고 있어요...', 'warning');
-        
-        // 채팅 기록에 추가
-        addToChatHistory('👤 학생', message);
-        
-        try {{
-            // 실제 API 호출을 위해 Streamlit으로 데이터 전송
-            // 여기서는 시뮬레이션
-            await simulateAIResponse(message);
-            
-        }} catch (error) {{
-            updateStatus('❌ 오류가 발생했습니다: ' + error.message, 'error');
-        }}
-    }}
-    
-    // AI 응답 시뮬레이션
-    async function simulateAIResponse(userMessage) {{
-        updateStatus('✍️ AI가 칠판에 답변을 작성하고 있어요...', 'warning');
-        
-        // 사용자 질문에 따른 간단한 응답 생성
-        let response = '';
-        
-        if (userMessage.includes('뉴턴') || userMessage.includes('물리')) {{
-            response = `## 뉴턴의 운동 법칙
-
-**뉴턴의 3법칙**은 물리학의 기본 원리입니다.
-
-**제1법칙 (관성의 법칙)**
-물체는 외부 힘이 작용하지 않으면 현재 상태를 유지합니다.
-
-[예시] 버스가 급브레이크를 밟으면 승객이 앞으로 쏠리는 현상
-
-**제2법칙 (가속도의 법칙)**  
-F = ma (힘 = 질량 × 가속도)
-
-[중요] 같은 힘이라도 질량이 클수록 가속도는 작아집니다.
-
-**제3법칙 (작용-반작용의 법칙)**
-모든 작용에는 크기가 같고 방향이 반대인 반작용이 존재합니다.
-
-[예시] 걸을 때 발로 땅을 뒤로 밀면, 땅이 우리를 앞으로 밀어줍니다.
-
-**결론**
-뉴턴의 법칙은 우리 일상의 모든 운동을 설명하는 기본 원리입니다!`;
-        }} else if (userMessage.includes('이차방정식') || userMessage.includes('수학')) {{
-            response = `## 이차방정식 풀이
-
-**이차방정식**의 일반형: ax² + bx + c = 0 (a ≠ 0)
-
-**풀이 방법들**
-
-**1. 인수분해**
-x² - 5x + 6 = 0
-(x - 2)(x - 3) = 0
-따라서 x = 2 또는 x = 3
-
-**2. 완전제곱식**
-x² + 6x + 9 = 0
-(x + 3)² = 0
-따라서 x = -3
-
-**3. 근의 공식**
-x = (-b ± √(b² - 4ac)) / 2a
-
-[중요] 판별식 D = b² - 4ac
-- D > 0: 서로 다른 두 실근
-- D = 0: 중근 (같은 실근 2개)  
-- D < 0: 허근
-
-[예시] x² - 4x + 3 = 0에서
-D = 16 - 12 = 4 > 0 → 서로 다른 두 실근`;
-        }} else {{
-            response = `## ${userMessage}에 대한 답변
-
-안녕하세요! **${userMessage}**에 대해 질문해주셨네요.
-
-이 주제는 정말 흥미로운 내용입니다.
-
-[중요] 구체적인 답변을 위해 더 자세한 질문을 해주시면 좋겠어요.
-
-[예시] 다음과 같이 질문해보세요:
-- "뉴턴의 법칙에 대해 설명해주세요"
-- "이차방정식 풀이 방법을 알려주세요"
-- "영어 문법 중 과거시제 사용법이 궁금해요"
-
-**더 구체적인 질문을 해주시면 더 정확하고 자세한 답변을 드릴 수 있어요!**`;
-        }}
-        
-        // 타이핑 효과로 칠판 업데이트
-        await typeOnBlackboard(response);
-        
-        // 채팅 기록에 추가
-        addToChatHistory('🤖 AI 튜터', '답변을 칠판에 정리했습니다.');
-        
-        // 음성으로 간단한 설명 (중복 방지)
-        speakText('답변을 칠판에 정리했습니다. 추가 질문이 있으시면 언제든 말씀해주세요!');
-        
-        updateStatus('✅ 답변 완료! 추가 질문해주세요 😊', 'success');
-    }}
-    
-    // 타이핑 효과
-    async function typeOnBlackboard(text) {{
-        const board = document.getElementById('blackboard');
-        if (!board) return;
-        
-        board.innerHTML = '';
-        
-        const words = text.split(' ');
-        let currentText = '';
-        
-        for (let i = 0; i < words.length; i++) {{
-            currentText += words[i] + ' ';
-            
-            // 포맷팅 적용
-            let formatted = currentText
-                .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style="color: #FFD700;">$1</strong>')
-                .replace(/## ([^\\n]+)/g, '<h3 style="color: #FFD700; text-decoration: underline; margin: 15px 0;">$1</h3>')
-                .replace(/\\[중요\\]([^\\n]+)/g, '<div style="color: #FF6B6B; font-weight: bold; margin: 10px 0; padding: 8px; background: rgba(255,107,107,0.2); border-radius: 5px;">🔴 $1</div>')
-                .replace(/\\[예시\\]([^\\n]+)/g, '<div style="color: #4DABF7; font-weight: bold; margin: 10px 0; padding: 8px; background: rgba(77,171,247,0.2); border-radius: 5px;">🔵 $1</div>')
-                .replace(/\\n/g, '<br>');
-            
-            board.innerHTML = formatted;
-            board.scrollTop = board.scrollHeight;
-            
-            await new Promise(resolve => setTimeout(resolve, 80)); // 80ms 지연
-        }}
-    }}
-    
-    // 음성 재생 (중복 방지)
-    function speakText(text) {{
-        // 기존 음성 중지
-        if (currentSpeech) {{
-            speechSynthesis.cancel();
-            currentSpeech = null;
-        }}
-        
-        if (!text.trim()) return;
-        
-        try {{
-            currentSpeech = new SpeechSynthesisUtterance(text);
-            currentSpeech.lang = 'ko-KR';
-            currentSpeech.rate = 1.0;
-            currentSpeech.pitch = 1.0;
-            
-            // 한국어 음성 찾기
-            const voices = speechSynthesis.getVoices();
-            const koreanVoice = voices.find(voice => 
-                voice.lang && voice.lang.toLowerCase().includes('ko')
-            );
-            if (koreanVoice) {{
-                currentSpeech.voice = koreanVoice;
-            }}
-            
-            currentSpeech.onend = function() {{
-                currentSpeech = null;
-            }};
-            
-            speechSynthesis.speak(currentSpeech);
-            
-        }} catch (error) {{
-            console.error('TTS Error:', error);
-        }}
-    }}
-    
-    // 음성 녹음 토글
-    async function toggleVoice() {{
-        if (isRecording) {{
-            stopRecording();
-        }} else {{
-            startRecording();
-        }}
-    }}
-    
-    async function startRecording() {{
-        try {{
-            updateStatus('🎤 마이크 권한을 요청하고 있어요...', 'warning');
-            
-            audioStream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
-            mediaRecorder = new MediaRecorder(audioStream);
-            
-            const audioChunks = [];
-            
-            mediaRecorder.ondataavailable = function(event) {{
-                audioChunks.push(event.data);
-            }};
-            
-            mediaRecorder.onstop = async function() {{
-                updateStatus('🤔 음성을 텍스트로 변환하고 있어요...', 'warning');
-                
-                // 음성 인식 시뮬레이션
-                const sampleQuestions = [
-                    "뉴턴의 법칙에 대해 설명해주세요",
-                    "이차방정식 풀이 방법을 알려주세요", 
-                    "영어 과거시제 사용법이 궁금해요"
-                ];
-                
-                const randomQuestion = sampleQuestions[Math.floor(Math.random() * sampleQuestions.length)];
-                
-                addToChatHistory('👤 학생 (음성)', randomQuestion);
-                await simulateAIResponse(randomQuestion);
-            }};
-            
-            mediaRecorder.start();
-            isRecording = true;
-            
-            const voiceBtn = document.getElementById('voice-btn');
-            if (voiceBtn) {{
-                voiceBtn.style.background = '#28a745';
-                voiceBtn.innerHTML = '🔴 녹음 중... (클릭해서 중지)';
-            }}
-            
-            updateStatus('👂 듣고 있어요! 질문해주세요!', 'success');
-            
-        }} catch (error) {{
-            updateStatus('❌ 마이크 권한이 필요해요!', 'error');
-        }}
-    }}
-    
-    function stopRecording() {{
-        if (mediaRecorder && mediaRecorder.state === 'recording') {{
-            mediaRecorder.stop();
-        }}
-        
-        if (audioStream) {{
-            audioStream.getTracks().forEach(track => track.stop());
-        }}
-        
-        isRecording = false;
-        
-        const voiceBtn = document.getElementById('voice-btn');
-        if (voiceBtn) {{
-            voiceBtn.style.background = '#dc3545';
-            voiceBtn.innerHTML = '🎤 음성으로 질문하기';
-        }}
-    }}
-    
-    // 칠판 지우기
-    function clearBoard() {{
-        updateBlackboard('<div style="text-align: center; color: #ccc; margin-top: 80px;">칠판이 지워졌습니다.<br>새로운 질문을 해주세요! 😊</div>');
-        updateStatus('🗑️ 칠판을 지웠어요!', 'success');
-        
-        // 음성도 중지
-        if (currentSpeech) {{
-            speechSynthesis.cancel();
-            currentSpeech = null;
-        }}
-    }}
-    
-    // Enter 키로 전송
-    document.addEventListener('DOMContentLoaded', function() {{
-        const textInput = document.getElementById('text-input');
-        if (textInput) {{
-            textInput.addEventListener('keydown', function(event) {{
-                if (event.key === 'Enter' && !event.shiftKey) {{
+    // Enter 키 지원
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('question-input');
+        if (input) {
+            input.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
-                    sendTextMessage();
-                }}
-            }});
-        }}
-        
-        updateStatus('💡 질문을 입력하거나 음성 버튼을 눌러주세요', 'info');
-    }});
+                    askQuestion();
+                }
+            });
+        }
+    });
     </script>
     """
     
@@ -594,20 +356,86 @@ def main():
     <div class="teacher-header">
         <h1>🎙️ {teacher['name']} AI 튜터</h1>
         <p>📚 {teacher['subject']} | 🎯 {teacher['level']} 수준</p>
-        <p>💬 텍스트와 음성으로 자유롭게 질문하세요!</p>
+        <p>💬 자유롭게 질문하고 대화하세요!</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # 세션 스토리지에서 질문 확인
+    pending_question = st.query_params.get('question', '')
     
     # 메인 레이아웃
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # 단순하고 실용적인 인터페이스
-        simple_interface = create_simple_interface(teacher)
-        st.components.v1.html(simple_interface, height=800)
+        # 질문 입력
+        user_question = st.text_area(
+            "💬 질문을 입력하세요:",
+            placeholder="예: 뉴턴의 법칙에 대해 설명해주세요",
+            height=100,
+            key="user_input",
+            value=pending_question
+        )
+        
+        col_a, col_b, col_c = st.columns([1, 1, 2])
+        
+        with col_a:
+            if st.button("📝 질문하기", key="ask_btn", use_container_width=True):
+                if user_question.strip():
+                    with st.spinner("🤔 AI가 답변 준비 중..."):
+                        response = process_question(user_question, teacher)
+                    st.session_state.current_response = response
+                    st.rerun()
+                else:
+                    st.warning("질문을 입력해주세요!")
+        
+        with col_b:
+            if st.button("🗑️ 지우기", key="clear_btn", use_container_width=True):
+                if 'current_response' in st.session_state:
+                    del st.session_state.current_response
+                if 'chat_history' in st.session_state:
+                    del st.session_state.chat_history
+                st.rerun()
+        
+        # 답변 표시
+        if 'current_response' in st.session_state:
+            st.markdown("### 🎓 AI 튜터 답변:")
+            
+            # 답변을 포맷팅해서 표시
+            formatted_response = st.session_state.current_response
+            formatted_response = re.sub(r'\*\*([^*]+)\*\*', r'**\1**', formatted_response)
+            formatted_response = re.sub(r'\[중요\]([^\n]+)', r'🔴 **중요:** \1', formatted_response)
+            formatted_response = re.sub(r'\[예시\]([^\n]+)', r'🔵 **예시:** \1', formatted_response)
+            
+            st.markdown(formatted_response)
+            
+            # 음성으로 읽기
+            if st.button("🔊 음성으로 듣기", key="tts_btn"):
+                # 간단한 음성 요약
+                summary = "답변을 확인해주세요. 추가 질문이 있으시면 언제든 말씀해주세요!"
+                
+                st.markdown(f"""
+                <script>
+                const utterance = new SpeechSynthesisUtterance('{summary}');
+                utterance.lang = 'ko-KR';
+                utterance.rate = 1.0;
+                speechSynthesis.speak(utterance);
+                </script>
+                """, unsafe_allow_html=True)
+                
+                st.success("🔊 음성 재생 중...")
+        
+        # 대화 기록
+        if 'chat_history' in st.session_state and st.session_state.chat_history:
+            with st.expander("📋 대화 기록 보기"):
+                for i, msg in enumerate(st.session_state.chat_history):
+                    if msg['role'] == 'user':
+                        st.markdown(f"**👤 학생:** {msg['content']}")
+                    else:
+                        st.markdown(f"**🤖 AI 튜터:** {msg['content'][:100]}...")
+                    st.markdown("---")
     
     with col2:
-        # 간단한 컨트롤 패널
+        # 컨트롤 패널
         st.subheader("🎛️ 컨트롤")
         
         if st.button("🏠 메인으로", key="home_btn", use_container_width=True):
@@ -615,9 +443,16 @@ def main():
         
         st.markdown("---")
         st.subheader("📊 현재 상태")
-        st.success("✅ 시스템 준비됨")
-        st.info("💬 텍스트/음성 입력 가능")
-        st.warning("⚠️ 시뮬레이션 모드")
+        
+        # API 키 확인
+        claude_key = st.secrets.get('ANTHROPIC_API_KEY', '')
+        if claude_key:
+            st.success("✅ Claude API 연결됨")
+        else:
+            st.error("❌ Claude API 키 필요")
+            st.info("💡 Streamlit secrets에 ANTHROPIC_API_KEY 설정하세요")
+        
+        st.info("💬 텍스트 입력 준비됨")
         
         st.markdown("---")
         st.subheader("👨‍🏫 튜터 정보")
@@ -625,25 +460,27 @@ def main():
         st.write(f"**전문분야:** {teacher['subject']}")
         st.write(f"**교육수준:** {teacher['level']}")
         
+        personality = teacher.get('personality', {})
+        st.write(f"**친근함:** {personality.get('friendliness', 70)}/100")
+        
         st.markdown("---")
         st.subheader("💡 사용법")
         st.markdown("""
-        **📝 텍스트 질문:**
-        1. 위의 입력창에 질문 입력
-        2. "텍스트로 질문하기" 버튼 클릭
-        3. 또는 Enter 키 사용
+        **🎯 현재 기능:**
+        1. 텍스트로 질문 입력
+        2. AI가 실제로 답변 생성
+        3. 대화 맥락 유지
+        4. 음성으로 간단히 듣기
         
-        **🎤 음성 질문:**
-        1. "음성으로 질문하기" 버튼 클릭
-        2. 마이크 권한 허용
-        3. 명확하게 질문하기
-        4. 다시 버튼 클릭해서 중지
+        **📝 질문 예시:**
+        - "뉴턴의 법칙 설명해줘"
+        - "이차방정식 풀이법"
+        - "영어 문법 질문"
         
-        **🔧 수정된 부분:**
-        - 음성 반복 문제 해결
-        - 칠판 스크롤 수정  
-        - 텍스트 입력 추가
-        - UI 대폭 단순화
+        **🚀 다음 업데이트:**
+        - 실제 음성 인식
+        - 실시간 스트리밍  
+        - 고급 TTS
         """)
 
 if __name__ == "__main__":
