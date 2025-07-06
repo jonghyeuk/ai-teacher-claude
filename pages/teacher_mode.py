@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime
 import re
+import html
 
 # Claude API 함수들 직접 정의 (import 오류 방지)
 def get_claude_response(user_message, system_prompt, chat_history):
@@ -92,7 +93,6 @@ def generate_system_prompt(teacher_config):
 
 ⚠️ 주의사항:
 - 반드시 위의 태그 형태만 사용하세요: <RED></RED>, <BLUE></BLUE>, <U></U>
-- s="red" 같은 형태는 절대 사용하지 마세요
 - 복잡한 HTML이나 CSS는 사용하지 마세요
 - 색상은 흰색(기본), 빨간색, 파란색, 밑줄만 사용하세요
 
@@ -107,11 +107,11 @@ F = ma
 학생이 이해하기 쉽게 단계별로 차근차근 설명해주세요."""
 
 def format_blackboard_text(text):
-    """칠판 텍스트 포맷팅 - 단순한 색상만"""
+    """칠판 텍스트 포맷팅 - 안전한 색상 처리"""
     # 제목 포맷팅
     text = re.sub(r'##\s*([^#\n]+)', r'<h2 class="title">\1</h2>', text)
     
-    # 색상 태그 변환 (단순화)
+    # 색상 태그 변환 (안전하게)
     text = re.sub(r'<RED>([^<]+)</RED>', r'<span class="red">\1</span>', text)
     text = re.sub(r'<BLUE>([^<]+)</BLUE>', r'<span class="blue">\1</span>', text)
     text = re.sub(r'<U>([^<]+)</U>', r'<span class="underline">\1</span>', text)
@@ -125,28 +125,33 @@ def format_blackboard_text(text):
     
     return text
 
-# 🎬 완전한 칠판 타이핑 + TTS 시스템
+# 🎬 완전한 칠판 타이핑 + TTS 시스템 - 안전 버전
 def create_typing_blackboard_system(text, voice_settings=None):
     """칠판 타이핑 + 음성 재생 통합 시스템 - 완전 안전 버전"""
     if voice_settings is None:
         voice_settings = {'speed': 1.0, 'pitch': 1.0}
     
     # 텍스트 안전 처리 (매우 엄격하게)
-    clean_text = text.replace('\n', ' ').replace('"', '').replace("'", "")
+    clean_text = text.replace('\n', ' ').replace('"', "'").replace("'", "`")
     clean_text = re.sub(r'<[^>]+>', '', clean_text)  # 모든 HTML 태그 제거
-    clean_text = re.sub(r'[<>]', '', clean_text)  # < > 문자 제거
+    clean_text = re.sub(r'[<>{}]', '', clean_text)  # < > { } 문자 제거
     clean_text = clean_text.replace('**', '').replace('*', '')
-    clean_text = re.sub(r'[^\w\s가-힣.,!?=\-+*/():]', '', clean_text)  # 안전한 문자만 유지
+    clean_text = re.sub(r'[^\w\s가-힣.,!?=\-+*/():ㄱ-ㅎ]', '', clean_text)  # 안전한 문자만 유지
     clean_text = clean_text[:500]  # 500자 제한
     
     # 표시용 텍스트도 안전하게 처리
-    display_text = text.replace("'", " ").replace('"', " ").replace('\\', " ")
-    display_text = re.sub(r'[<>]', '', display_text)  # < > 완전 제거
+    display_text = text.replace("'", "`").replace('"', "`").replace('\\', " ")
+    display_text = re.sub(r'[<>{}]', '', display_text)  # < > { } 완전 제거
     display_text = display_text.replace('\n', ' ')  # 줄바꿈을 공백으로
     display_text = re.sub(r'[^\w\s가-힣.,!?=\-+*/():*#>REDBLAU]', '', display_text)  # 매우 제한적
+    display_text = display_text[:800]  # 표시용은 800자까지
     
     speed = voice_settings.get('speed', 1.0)
     pitch = voice_settings.get('pitch', 1.0)
+    
+    # 안전한 변수 전달을 위한 처리
+    safe_display_text = html.escape(display_text).replace("'", "`").replace('"', "`")
+    safe_voice_text = html.escape(clean_text).replace("'", "`").replace('"', "`")
     
     html_system = f"""
     <div id="typing-tts-system" style="width: 100%; background: #1a1a1a; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
@@ -205,8 +210,8 @@ def create_typing_blackboard_system(text, voice_settings=None):
             <!-- 타이핑 커서 -->
             <span id="typing-cursor" style="color: #FFD700; font-size: 20px; animation: cursor-blink 1s infinite; display: none;">|</span>
         </div>
-    </div>"""
-    
+    </div>
+
     <style>
     @keyframes eq-bounce {{
         0%, 100% {{ height: 10px; }}
@@ -284,10 +289,10 @@ def create_typing_blackboard_system(text, voice_settings=None):
     let isTeaching = false;
     let typingInterval = null;
     let ttsUtterance = null;
-    let currentText = `{display_text}`;
+    let currentText = `{safe_display_text}`;
     let voiceSpeed = {speed};
     let voicePitch = {pitch};
-    let speechText = `{clean_text}`;
+    let speechText = `{safe_voice_text}`;
     
     // LED 업데이트
     function updateLED(message) {{
@@ -353,15 +358,15 @@ def create_typing_blackboard_system(text, voice_settings=None):
         }}, 50); // 50ms 간격으로 타이핑
     }}
     
-    // 칠판 텍스트 포맷팅
+    // 칠판 텍스트 포맷팅 (안전한 버전)
     function formatBlackboardText(text) {{
         // 제목 포맷팅
         text = text.replace(/##\\s*([^#\\n]+)/g, '<h2 class="title">$1</h2>');
         
-        // 색상 태그
-        text = text.replace(/<RED>([^<]+)<\\/RED>/g, '<span class="red">$1</span>');
-        text = text.replace(/<BLUE>([^<]+)<\\/BLUE>/g, '<span class="blue">$1</span>');
-        text = text.replace(/<U>([^<]+)<\\/U>/g, '<span class="underline">$1</span>');
+        // 색상 태그 (안전하게)
+        text = text.replace(/RED>([^R]+)RED>/g, '<span class="red">$1</span>');
+        text = text.replace(/BLUE>([^B]+)BLUE>/g, '<span class="blue">$1</span>');
+        text = text.replace(/U>([^U]+)U>/g, '<span class="underline">$1</span>');
         
         // 강조
         text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<span class="bold">$1</span>');
@@ -691,7 +696,7 @@ def main():
         
         # 테스트 버튼 (완전 안전한 데이터)
         if st.button("🧪 시스템 테스트", key="test_btn"):
-            # 100% 안전한 테스트 내용 (HTML 태그 없음)
+            # 100% 안전한 테스트 내용 (안전한 태그 사용)
             test_explanation = """## 뉴턴의 운동법칙
 
 **정의**: 물체의 운동을 설명하는 기본 법칙들
@@ -699,16 +704,16 @@ def main():
 **제1법칙**: 관성의 법칙
 물체는 외부 힘이 없으면 현재 상태를 유지합니다.
 
-**중요**: 정지한 물체는 계속 정지하고, 움직이는 물체는 계속 움직입니다.
+<RED>중요: 정지한 물체는 계속 정지하고, 움직이는 물체는 계속 움직입니다.</RED>
 
 **제2법칙**: 가속도의 법칙
 F = ma
 
-**예시**: 무거운 물체일수록 더 큰 힘이 필요합니다.
+<BLUE>예시: 무거운 물체일수록 더 큰 힘이 필요합니다.</BLUE>
 
 **제3법칙**: 작용-반작용의 법칙
 
-**결론**: 이 세 법칙이 모든 운동의 기초가 됩니다."""
+<U>결론: 이 세 법칙이 모든 운동의 기초가 됩니다.</U>"""
             
             st.session_state.current_explanation = test_explanation
             st.success("🎉 100% 안전한 테스트 수업이 준비되었습니다!")
@@ -783,10 +788,7 @@ def format_for_blackboard(response):
         # 공식 감지 (단순한 등식만)
         if '=' in line and len(line) < 50:
             # 간단한 등식인지 확인
-            if re.match(r'^[A-Za-z]+\s*=\s*[A-Za-z0-9\s\+\-\*\/]+
-
-if __name__ == "__main__":
-    main(), line.strip()):
+            if re.match(r'^[A-Za-z]+\s*=\s*[A-Za-z0-9\s\+\-\*\/]+$', line.strip()):
                 formatted += f"{line}\n\n"
                 continue
         
@@ -794,19 +796,19 @@ if __name__ == "__main__":
         if any(keyword in line for keyword in ['중요', '핵심', '주의', '반드시', '꼭', '절대']):
             # < > 문자를 안전하게 처리
             safe_line = line.replace('<', '').replace('>', '')
-            formatted += f"RED>{safe_line}RED>\n\n"
+            formatted += f"<RED>{safe_line}</RED>\n\n"
             continue
         
         # 예시 감지 (안전한 태그)
         if line.startswith('예:') or line.startswith('예시:') or '예를 들어' in line[:20]:
             safe_line = line.replace('<', '').replace('>', '')
-            formatted += f"BLUE>{safe_line}BLUE>\n\n"
+            formatted += f"<BLUE>{safe_line}</BLUE>\n\n"
             continue
         
         # 결론 감지 (안전한 태그)
         if any(keyword in line[:15] for keyword in ['결론', '따라서', '그러므로', '정리하면']):
             safe_line = line.replace('<', '').replace('>', '')
-            formatted += f"U>{safe_line}U>\n\n"
+            formatted += f"<U>{safe_line}</U>\n\n"
             continue
         
         # 단계별 설명 (**텍스트** 형태로만)
