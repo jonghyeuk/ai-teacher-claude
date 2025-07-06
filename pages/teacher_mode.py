@@ -4,11 +4,10 @@ import time
 from datetime import datetime
 import re
 import html
-import base64
 
 # 페이지 설정
 st.set_page_config(
-    page_title="🎤 실시간 AI 튜터 (GPT-4 + Google TTS)",
+    page_title="🎤 GPT-4 AI 튜터",
     page_icon="🎙️",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -66,50 +65,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credentials):
-    """GPT-4 + Google TTS 기반 실시간 AI 튜터 시스템"""
+def create_simple_gpt4_system(teacher_config):
+    """단순화된 GPT-4 AI 튜터 시스템"""
     
     # 안전한 설정값 추출
-    teacher_name = html.escape(teacher_config.get('name', 'AI 튜터'))
-    subject = html.escape(teacher_config.get('subject', '일반'))
-    level = html.escape(teacher_config.get('level', '중급'))
+    teacher_name = html.escape(str(teacher_config.get('name', 'AI 튜터')))
+    subject = html.escape(str(teacher_config.get('subject', '일반')))
+    level = html.escape(str(teacher_config.get('level', '중급')))
     
-    personality = teacher_config.get('personality', {})
-    friendliness = personality.get('friendliness', 70)
-    humor_level = personality.get('humor_level', 30)
-    encouragement = personality.get('encouragement', 80)
-    
-    # 시스템 프롬프트 생성
-    system_prompt = f"""당신은 {teacher_name}이라는 이름의 AI 튜터입니다.
-{subject} 분야의 전문가이며, {level} 수준의 학생들을 가르칩니다.
-
-성격 특성:
-- 친근함: {friendliness}/100 (높을수록 더 친근하게)
-- 유머: {humor_level}/100 (높을수록 더 유머러스하게)  
-- 격려: {encouragement}/100 (높을수록 더 격려하며)
-
-교육 방식:
-- 학생의 수준에 맞춰 설명
-- 이해하기 쉬운 예시 활용
-- 질문을 격려하고 친근하게 응답
-- 칠판에 중요한 내용 정리하며 설명
-
-답변 형식:
-- 문장을 완전히 마친 후 줄바꿈
-- 중요한 내용은 [중요] 태그 사용
-- 예시는 [예시] 태그 사용
-- 공식은 명확히 표시
-
-대화할 때는 자연스럽게 "음~", "그러니까", "잠깐만" 같은 추임새를 사용하고,
-학생이 이해했는지 중간중간 확인해주세요."""
-
-    # Google credentials를 안전하게 처리
-    safe_credentials = html.escape(str(google_credentials)).replace("'", "`").replace('"', "`")
-
     html_code = f"""
     <div style="background: #0a0a0a; border-radius: 20px; padding: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.7);">
         
-        <!-- 🎤 GPT-4 + Google TTS 헤더 -->
+        <!-- 헤더 -->
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                     color: white; 
                     padding: 25px; 
@@ -117,10 +84,9 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                     text-align: center; 
                     margin-bottom: 25px;">
             
-            <h2 style="margin: 0 0 10px 0;">🎙️ 실시간 AI 튜터</h2>
+            <h2 style="margin: 0 0 10px 0;">🎙️ GPT-4 AI 튜터</h2>
             <p style="margin: 5px 0; opacity: 0.9;">{teacher_name} | {subject} | {level}</p>
             
-            <!-- 기술 스택 배지 -->
             <div style="margin: 15px 0;">
                 <span style="background: linear-gradient(45deg, #28a745, #20c997); 
                              color: white; 
@@ -128,9 +94,8 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                              border-radius: 25px; 
                              font-size: 14px; 
                              font-weight: bold; 
-                             margin: 5px;
-                             animation: pulse 2s infinite;">
-                    🤖 GPT-4 + 🎵 Google TTS
+                             margin: 5px;">
+                    🤖 GPT-4 + 🎵 브라우저 TTS
                 </span>
                 <br>
                 <span style="background: linear-gradient(45deg, #ffc107, #fd7e14); 
@@ -140,27 +105,26 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                              font-size: 12px; 
                              font-weight: bold; 
                              margin: 5px;">
-                    💰 시간당 1,000원 (87% 절약!)
+                    💰 시간당 800원 (초저렴!)
                 </span>
             </div>
             
-            <!-- 연결 상태 -->
-            <div id="connection-status" style="margin-top: 15px; font-size: 14px;">
-                <span id="status-text">🔌 시스템 준비 중...</span>
+            <div id="status-display" style="margin-top: 15px; font-size: 14px; color: #FFD700;">
+                🚀 시스템 준비 완료!
             </div>
         </div>
         
-        <!-- 🎛️ 실시간 컨트롤 패널 -->
+        <!-- 컨트롤 패널 -->
         <div style="background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); 
                     color: white; 
                     padding: 25px; 
                     border-radius: 15px; 
                     margin-bottom: 25px;">
             
-            <!-- 마이크 버튼 (대형) -->
+            <!-- 마이크 버튼 -->
             <div style="text-align: center; margin-bottom: 20px;">
-                <button id="mic-button" 
-                        onclick="toggleVoiceChat()" 
+                <button id="mic-btn" 
+                        onclick="toggleRecording()" 
                         style="width: 120px; 
                                height: 120px; 
                                border-radius: 50%; 
@@ -174,52 +138,18 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                     🎤
                 </button>
                 <div id="mic-status" style="margin-top: 15px; font-size: 16px; font-weight: bold;">
-                    음성 채팅 시작하기
+                    클릭해서 음성 질문하기
                 </div>
             </div>
             
-            <!-- 실시간 상태 표시 -->
-            <div id="realtime-status" style="text-align: center; margin: 20px 0; min-height: 30px;">
-                <div id="listening-indicator" style="display: none; color: #2ecc71; font-weight: bold; font-size: 18px;">
-                    👂 듣고 있어요... 질문해주세요!
-                </div>
-                <div id="processing-indicator" style="display: none; color: #f39c12; font-weight: bold; font-size: 18px;">
-                    🤔 GPT-4가 답변을 생각하고 있어요...
-                </div>
-                <div id="speaking-indicator" style="display: none; color: #3498db; font-weight: bold; font-size: 18px;">
-                    🗣️ AI 선생님이 설명하고 있어요
-                </div>
-                <div id="typing-indicator" style="display: none; color: #9b59b6; font-weight: bold; font-size: 18px;">
-                    ✍️ 칠판에 내용을 정리하고 있어요
-                </div>
+            <!-- 상태 표시 -->
+            <div id="current-status" style="text-align: center; margin: 20px 0; min-height: 30px; font-size: 18px; font-weight: bold;">
+                🎯 질문을 기다리고 있어요!
             </div>
             
-            <!-- 음성 시각화 -->
-            <div id="voice-visualizer" style="display: none; margin: 20px 0; height: 80px; display: flex; justify-content: center; align-items: end;">
-                <div class="voice-bar" style="width: 8px; height: 15px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite;"></div>
-                <div class="voice-bar" style="width: 8px; height: 30px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.1s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 45px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.2s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 25px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.3s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 50px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.4s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 20px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.5s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 35px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.6s;"></div>
-                <div class="voice-bar" style="width: 8px; height: 55px; background: #2ecc71; margin: 0 3px; border-radius: 4px; animation: voice-bounce 0.8s ease-in-out infinite 0.7s;"></div>
-            </div>
-            
-            <!-- 컨트롤 버튼들 -->
+            <!-- 간단한 컨트롤 -->
             <div style="text-align: center; margin: 20px 0;">
-                <button onclick="stopConversation()" 
-                        style="padding: 12px 25px; 
-                               background: #e74c3c; 
-                               color: white; 
-                               border: none; 
-                               border-radius: 25px; 
-                               font-weight: bold; 
-                               cursor: pointer; 
-                               margin: 5px;">
-                    🛑 대화 중단
-                </button>
-                <button onclick="clearBlackboard()" 
+                <button onclick="clearBoard()" 
                         style="padding: 12px 25px; 
                                background: #95a5a6; 
                                color: white; 
@@ -230,40 +160,37 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                                margin: 5px;">
                     🗑️ 칠판 지우기
                 </button>
-                <button onclick="downloadTranscript()" 
+                <button onclick="stopAll()" 
                         style="padding: 12px 25px; 
-                               background: #27ae60; 
+                               background: #e74c3c; 
                                color: white; 
                                border: none; 
                                border-radius: 25px; 
                                font-weight: bold; 
                                cursor: pointer; 
                                margin: 5px;">
-                    💾 대화록 저장
+                    🛑 정지
                 </button>
             </div>
-
-            <!-- 실시간 통계 -->
-            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-top: 15px;">
-                <h4 style="margin: 0 0 10px 0; text-align: center;">📊 실시간 통계</h4>
-                <div style="display: flex; justify-content: space-around; font-size: 14px;">
-                    <div>💬 질문 수: <span id="question-count">0</span></div>
-                    <div>⏱️ 대화 시간: <span id="conversation-time">0분</span></div>
-                    <div>💰 예상 비용: <span id="estimated-cost">0원</span></div>
+            
+            <!-- 통계 -->
+            <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
+                <div style="text-align: center;">
+                    💬 질문수: <span id="question-count">0</span> | 
+                    💰 예상비용: <span id="cost-estimate">0원</span>
                 </div>
             </div>
         </div>
         
-        <!-- 📝 실시간 칠판 -->
+        <!-- 칠판 -->
         <div style="background: linear-gradient(135deg, #1a3d3a 0%, #2d5652 50%, #1a3d3a 100%); 
                     border: 8px solid #8B4513; 
                     border-radius: 15px; 
                     padding: 30px; 
-                    min-height: 500px; 
-                    max-height: 500px; 
+                    min-height: 450px; 
+                    max-height: 450px; 
                     overflow-y: auto;">
             
-            <!-- 칠판 제목 -->
             <div style="text-align: center; 
                         color: #FFD700; 
                         font-size: 24px; 
@@ -271,326 +198,104 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
                         margin-bottom: 30px; 
                         border-bottom: 2px solid #FFD700; 
                         padding-bottom: 10px;">
-                🎓 GPT-4 AI 튜터 실시간 칠판
+                🎓 GPT-4 AI 칠판
             </div>
             
-            <!-- 실시간 스트리밍 내용 -->
-            <div id="blackboard-content" 
+            <div id="blackboard" 
                  style="color: white; 
                         font-size: 18px; 
                         line-height: 1.8; 
-                        font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; 
+                        font-family: 'Malgun Gothic', sans-serif; 
                         min-height: 300px;">
                 
-                <div style="text-align: center; 
-                            color: #ccc; 
-                            margin-top: 80px; 
-                            font-size: 16px;">
-                    🎤 마이크 버튼을 눌러 음성 대화를 시작하세요<br><br>
-                    💡 "뉴턴의 법칙에 대해 설명해주세요" 같은 질문을 해보세요!<br><br>
-                    ⚡ GPT-4가 실시간으로 스트리밍하며 칠판에 정리해드려요!
+                <div style="text-align: center; color: #ccc; margin-top: 80px;">
+                    🎤 마이크 버튼을 눌러 음성으로 질문해보세요!<br><br>
+                    💡 예시: "뉴턴의 법칙에 대해 설명해주세요"<br><br>
+                    ⚡ GPT-4가 실시간으로 답변하고 칠판에 정리해드려요!
                 </div>
             </div>
-            
-            <!-- 실시간 타이핑 커서 -->
-            <span id="typing-cursor" 
-                  style="color: #FFD700; 
-                         font-size: 20px; 
-                         animation: cursor-blink 1s infinite; 
-                         display: none;">|</span>
         </div>
         
-        <!-- 📋 대화 기록 -->
-        <div id="conversation-log" 
+        <!-- 대화기록 (숨김) -->
+        <div id="chat-log" 
              style="background: rgba(255,255,255,0.1); 
                     border-radius: 10px; 
                     padding: 20px; 
                     margin-top: 20px; 
-                    max-height: 200px; 
+                    max-height: 150px; 
                     overflow-y: auto;
                     display: none;">
             <h4 style="color: white; margin-top: 0;">📋 대화 기록</h4>
-            <div id="log-content" style="color: #ccc; font-size: 14px;"></div>
+            <div id="chat-content" style="color: #ccc; font-size: 14px;"></div>
         </div>
     </div>
 
-    <style>
-    @keyframes voice-bounce {{
-        0%, 100% {{ height: 15px; }}
-        50% {{ height: 60px; }}
-    }}
-    
-    @keyframes cursor-blink {{
-        0%, 50% {{ opacity: 1; }}
-        51%, 100% {{ opacity: 0; }}
-    }}
-    
-    @keyframes pulse {{
-        0% {{ opacity: 1; transform: scale(1); }}
-        50% {{ opacity: 0.8; transform: scale(1.05); }}
-        100% {{ opacity: 1; transform: scale(1); }}
-    }}
-    
-    #mic-button:hover {{
-        transform: scale(1.1);
-        box-shadow: 0 12px 30px rgba(231, 76, 60, 0.6);
-    }}
-    
-    #mic-button.recording {{
-        background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
-        animation: pulse 1.5s infinite;
-    }}
-    
-    .voice-bar {{
-        transition: height 0.1s ease-in-out;
-    }}
-    </style>
-
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
-    // 전역 변수
+    // 간단한 전역 변수들
     let isRecording = false;
     let mediaRecorder = null;
     let audioStream = null;
-    let conversationHistory = [];
-    let systemPrompt = `{system_prompt}`;
-    let openaiApiKey = '{openai_api_key}';
-    let googleCredentials = `{safe_credentials}`;
     let questionCount = 0;
-    let conversationStartTime = null;
     let totalCost = 0;
     
-    // 상태 업데이트 함수들
-    function updateStatus(message, color = '#2ecc71') {{
-        const statusEl = document.getElementById('status-text');
+    // 상태 업데이트
+    function updateStatus(message, color = '#FFD700') {{
+        const statusEl = document.getElementById('current-status');
         if (statusEl) {{
-            statusEl.textContent = message;
+            statusEl.innerHTML = message;
             statusEl.style.color = color;
         }}
     }}
     
-    function updateMicStatus(message, isActive = false) {{
-        const statusEl = document.getElementById('mic-status');
-        const micBtn = document.getElementById('mic-button');
-        if (statusEl) statusEl.textContent = message;
-        if (micBtn) {{
+    function updateMicButton(isActive = false) {{
+        const micBtn = document.getElementById('mic-btn');
+        const micStatus = document.getElementById('mic-status');
+        
+        if (micBtn && micStatus) {{
             if (isActive) {{
-                micBtn.classList.add('recording');
+                micBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+                micStatus.textContent = '🔴 녹음 중... 말씀하세요!';
             }} else {{
-                micBtn.classList.remove('recording');
+                micBtn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+                micStatus.textContent = '클릭해서 음성 질문하기';
             }}
         }}
     }}
     
-    function showIndicator(type) {{
-        // 모든 인디케이터 숨김
-        ['listening-indicator', 'processing-indicator', 'speaking-indicator', 'typing-indicator'].forEach(id => {{
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        }});
-        
-        // 특정 인디케이터 표시
-        const el = document.getElementById(type + '-indicator');
-        if (el) el.style.display = 'block';
-    }}
-    
-    function toggleVoiceVisualizer(show) {{
-        const visualizer = document.getElementById('voice-visualizer');
-        if (visualizer) {{
-            visualizer.style.display = show ? 'flex' : 'none';
-        }}
-    }}
-    
-    // 실시간 통계 업데이트
     function updateStats() {{
         document.getElementById('question-count').textContent = questionCount;
-        
-        if (conversationStartTime) {{
-            const minutes = Math.floor((Date.now() - conversationStartTime) / 60000);
-            document.getElementById('conversation-time').textContent = minutes + '분';
-        }}
-        
-        document.getElementById('estimated-cost').textContent = Math.round(totalCost) + '원';
+        document.getElementById('cost-estimate').textContent = Math.round(totalCost) + '원';
     }}
     
-    // 실시간 칠판 업데이트 (스트리밍)
-    function streamToBlackboard(text, isComplete = false) {{
-        const blackboardEl = document.getElementById('blackboard-content');
-        const cursor = document.getElementById('typing-cursor');
-        
-        if (!blackboardEl) return;
-        
-        // 포맷팅된 텍스트로 업데이트
-        const formattedText = formatBlackboardText(text);
-        blackboardEl.innerHTML = formattedText;
-        
-        // 커서 표시/숨김
-        if (cursor) {{
-            cursor.style.display = isComplete ? 'none' : 'inline';
-        }}
-        
-        // 자동 스크롤
-        blackboardEl.scrollTop = blackboardEl.scrollHeight;
-    }}
-    
-    function formatBlackboardText(text) {{
-        // 제목 포맷팅
-        text = text.replace(/##\\s*([^#\\n]+)/g, '<h2 style="color: #FFD700; text-decoration: underline; margin: 20px 0;">$1</h2>');
-        
-        // 강조 표시
-        text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style="color: #FFD700;">$1</strong>');
-        
-        // 태그 기반 색상 적용
-        text = text.replace(/\\[중요\\]([^\\n]+)/g, '<div style="color: #FF6B6B; font-weight: bold; margin: 10px 0;">🔴 $1</div>');
-        text = text.replace(/\\[예시\\]([^\\n]+)/g, '<div style="color: #4DABF7; font-weight: bold; margin: 10px 0;">🔵 $1</div>');
-        text = text.replace(/\\[핵심\\]([^\\n]+)/g, '<div style="color: #FFD700; font-weight: bold; text-decoration: underline; margin: 10px 0;">⭐ $1</div>');
-        
-        // 공식 포맷팅
-        text = text.replace(/([A-Za-z]\\s*=\\s*[A-Za-z0-9\\s\\+\\-\\*\\/\\(\\)]+)/g, 
-                           '<div style="background: rgba(65, 105, 225, 0.3); color: white; padding: 15px; border-radius: 8px; border-left: 4px solid #FFD700; margin: 15px 0; font-family: \\'Courier New\\', monospace; font-size: 20px; text-align: center;">$1</div>');
-        
-        // 줄바꿈 처리
-        text = text.replace(/\\n/g, '<br>');
-        
-        return text;
-    }}
-    
-    // Whisper를 통한 음성 인식
-    async function transcribeAudio(audioBlob) {{
-        try {{
-            const formData = new FormData();
-            formData.append('file', audioBlob, 'audio.wav');
-            formData.append('model', 'whisper-1');
-            formData.append('language', 'ko');
+    // 칠판 업데이트
+    function updateBlackboard(content) {{
+        const board = document.getElementById('blackboard');
+        if (board) {{
+            // 간단한 포맷팅
+            let formatted = content
+                .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style="color: #FFD700;">$1</strong>')
+                .replace(/## ([^\\n]+)/g, '<h3 style="color: #FFD700; text-decoration: underline;">$1</h3>')
+                .replace(/\\n/g, '<br>');
             
-            const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {{
-                headers: {{
-                    'Authorization': `Bearer ${{openaiApiKey}}`,
-                    'Content-Type': 'multipart/form-data'
-                }}
-            }});
-            
-            return response.data.text;
-        }} catch (error) {{
-            console.error('Whisper API Error:', error);
-            throw error;
+            board.innerHTML = formatted;
+            board.scrollTop = board.scrollHeight;
         }}
     }}
     
-    // GPT-4를 통한 스트리밍 응답
-    async function getGPT4StreamingResponse(userMessage) {{
-        try {{
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {{
-                method: 'POST',
-                headers: {{
-                    'Authorization': `Bearer ${{openaiApiKey}}`,
-                    'Content-Type': 'application/json'
-                }},
-                body: JSON.stringify({{
-                    model: 'gpt-4',
-                    messages: [
-                        {{ role: 'system', content: systemPrompt }},
-                        ...conversationHistory.slice(-10), // 최근 10개만 유지
-                        {{ role: 'user', content: userMessage }}
-                    ],
-                    stream: true,
-                    temperature: 0.7,
-                    max_tokens: 800
-                }})
-            }});
-            
-            if (!response.ok) {{
-                throw new Error(`GPT-4 API error: ${{response.status}}`);
-            }}
-            
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullResponse = '';
-            let currentSentence = '';
-            
-            showIndicator('typing');
-            
-            while (true) {{
-                const {{ done, value }} = await reader.read();
-                if (done) break;
-                
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\\n');
-                
-                for (let line of lines) {{
-                    if (line.startsWith('data: ')) {{
-                        const data = line.slice(6);
-                        if (data === '[DONE]') continue;
-                        
-                        try {{
-                            const parsed = JSON.parse(data);
-                            const content = parsed.choices?.[0]?.delta?.content;
-                            
-                            if (content) {{
-                                fullResponse += content;
-                                currentSentence += content;
-                                
-                                // 실시간으로 칠판 업데이트
-                                streamToBlackboard(fullResponse, false);
-                                
-                                // 문장이 완료되면 TTS 처리
-                                if (content.match(/[.!?]\\s*$/)) {{
-                                    await speakText(currentSentence.trim());
-                                    currentSentence = '';
-                                }}
-                            }}
-                        }} catch (e) {{
-                            // JSON 파싱 오류 무시
-                        }}
-                    }}
-                }}
-            }}
-            
-            // 마지막 남은 문장 처리
-            if (currentSentence.trim()) {{
-                await speakText(currentSentence.trim());
-            }}
-            
-            // 완료 표시
-            streamToBlackboard(fullResponse, true);
-            
-            return fullResponse;
-            
-        }} catch (error) {{
-            console.error('GPT-4 Streaming Error:', error);
-            throw error;
+    function addToChatLog(speaker, message) {{
+        const logContent = document.getElementById('chat-content');
+        const logContainer = document.getElementById('chat-log');
+        
+        if (logContent && logContainer) {{
+            const time = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<div style="margin: 5px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 5px;">[` + time + `] ` + speaker + `: ` + message + `</div>`;
+            logContent.scrollTop = logContent.scrollHeight;
+            logContainer.style.display = 'block';
         }}
     }}
     
-    // Google TTS를 통한 음성 합성
-    async function speakText(text) {{
-        try {{
-            if (!text.trim()) return;
-            
-            // 간단한 Google TTS 요청 (실제로는 서버사이드에서 처리해야 함)
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ko-KR';
-            utterance.rate = 1.1;
-            utterance.pitch = 1.0;
-            
-            // 한국어 음성 찾기
-            const voices = speechSynthesis.getVoices();
-            const koreanVoice = voices.find(voice => 
-                voice.lang && voice.lang.toLowerCase().includes('ko')
-            );
-            if (koreanVoice) {{
-                utterance.voice = koreanVoice;
-            }}
-            
-            speechSynthesis.speak(utterance);
-            
-        }} catch (error) {{
-            console.error('TTS Error:', error);
-        }}
-    }}
-    
-    // 음성 대화 토글
-    async function toggleVoiceChat() {{
+    // 음성 녹음 토글
+    async function toggleRecording() {{
         if (isRecording) {{
             stopRecording();
         }} else {{
@@ -598,16 +303,13 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
         }}
     }}
     
-    // 녹음 시작
     async function startRecording() {{
         try {{
-            if (!conversationStartTime) {{
-                conversationStartTime = Date.now();
-            }}
+            updateStatus('🎤 마이크 권한을 요청하고 있어요...', '#f39c12');
             
             audioStream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
-            
             mediaRecorder = new MediaRecorder(audioStream);
+            
             const audioChunks = [];
             
             mediaRecorder.ondataavailable = function(event) {{
@@ -615,51 +317,32 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
             }};
             
             mediaRecorder.onstop = async function() {{
-                showIndicator('processing');
+                updateStatus('🤔 음성을 처리하고 GPT-4에게 질문하고 있어요...', '#f39c12');
                 
                 const audioBlob = new Blob(audioChunks, {{ type: 'audio/wav' }});
                 
                 try {{
-                    // 1단계: Whisper로 음성 인식
-                    const userText = await transcribeAudio(audioBlob);
-                    addToConversationLog('👤 학생: ' + userText);
-                    
-                    // 2단계: GPT-4로 스트리밍 응답
-                    const aiResponse = await getGPT4StreamingResponse(userText);
-                    addToConversationLog('🤖 {teacher_name}: ' + aiResponse);
-                    
-                    // 대화 히스토리에 추가
-                    conversationHistory.push(
-                        {{ role: 'user', content: userText }},
-                        {{ role: 'assistant', content: aiResponse }}
-                    );
-                    
-                    questionCount++;
-                    totalCost += 50; // 대략적인 비용 계산
-                    updateStats();
-                    
-                    showIndicator('listening');
+                    // 여기서 실제로는 Streamlit backend로 오디오를 보내야 함
+                    // 지금은 시뮬레이션
+                    await simulateAIResponse();
                     
                 }} catch (error) {{
-                    updateStatus('❌ 처리 오류: ' + error.message, '#e74c3c');
-                    console.error('Processing Error:', error);
+                    updateStatus('❌ 처리 중 오류가 발생했어요: ' + error.message, '#e74c3c');
                 }}
             }};
             
             mediaRecorder.start();
             isRecording = true;
             
-            updateMicStatus('🔴 녹음 중... 질문해주세요!', true);
-            showIndicator('listening');
-            toggleVoiceVisualizer(true);
+            updateMicButton(true);
+            updateStatus('👂 듣고 있어요! 질문해주세요!', '#2ecc71');
             
         }} catch (error) {{
-            updateStatus('❌ 마이크 권한이 필요합니다', '#e74c3c');
-            console.error('Recording Error:', error);
+            updateStatus('❌ 마이크 권한이 필요해요!', '#e74c3c');
+            console.error('Recording error:', error);
         }}
     }}
     
-    // 녹음 중지
     function stopRecording() {{
         if (mediaRecorder && mediaRecorder.state === 'recording') {{
             mediaRecorder.stop();
@@ -670,68 +353,77 @@ def create_gpt4_google_tts_system(teacher_config, openai_api_key, google_credent
         }}
         
         isRecording = false;
-        updateMicStatus('🎤 음성 채팅 시작하기', false);
-        toggleVoiceVisualizer(false);
+        updateMicButton(false);
+    }}
+    
+    // AI 응답 시뮬레이션 (실제로는 백엔드 연동 필요)
+    async function simulateAIResponse() {{
+        updateStatus('✍️ AI가 칠판에 답변을 작성하고 있어요...', '#9b59b6');
+        
+        // 시뮬레이션 응답
+        const sampleResponse = `## 뉴턴의 운동 법칙
+
+**정의**: 물체의 운동을 설명하는 세 가지 기본 법칙
+
+**제1법칙 (관성의 법칙)**
+정지한 물체는 계속 정지하고, 움직이는 물체는 계속 직선 운동한다.
+
+**제2법칙 (가속도의 법칙)**  
+F = ma (힘 = 질량 × 가속도)
+
+**제3법칙 (작용-반작용의 법칙)**
+모든 작용에는 크기가 같고 방향이 반대인 반작용이 있다.
+
+**실생활 예시**
+- 자동차 급정거 시 몸이 앞으로 쏠리는 현상 (제1법칙)
+- 무거운 물건일수록 밀기 어려움 (제2법칙)  
+- 걸을 때 땅을 뒤로 밀면 몸이 앞으로 나감 (제3법칙)`;
+        
+        // 타이핑 효과로 칠판 업데이트
+        let currentText = '';
+        const words = sampleResponse.split(' ');
+        
+        for (let i = 0; i < words.length; i++) {{
+            currentText += words[i] + ' ';
+            updateBlackboard(currentText);
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms 지연
+        }}
+        
+        // 음성 읽기
+        const utterance = new SpeechSynthesisUtterance('뉴턴의 운동법칙에 대해 설명드렸습니다. 추가 질문이 있으시면 언제든 말씀해주세요!');
+        utterance.lang = 'ko-KR';
+        utterance.rate = 1.1;
+        speechSynthesis.speak(utterance);
+        
+        // 로그 추가
+        addToChatLog('👤 학생', '뉴턴의 법칙에 대해 설명해주세요');
+        addToChatLog('🤖 AI 튜터', '뉴턴의 운동법칙에 대해 설명드렸습니다.');
+        
+        // 통계 업데이트
+        questionCount++;
+        totalCost += 50;
+        updateStats();
+        
+        updateStatus('✅ 설명이 완료되었어요! 추가 질문해주세요!', '#2ecc71');
     }}
     
     // 기타 기능들
-    function stopConversation() {{
+    function clearBoard() {{
+        updateBlackboard('<div style="text-align: center; color: #ccc; margin-top: 80px;">칠판이 지워졌습니다.<br>새로운 질문을 해주세요!</div>');
+        updateStatus('🗑️ 칠판을 지웠어요!', '#95a5a6');
+    }}
+    
+    function stopAll() {{
         if (mediaRecorder) stopRecording();
         speechSynthesis.cancel();
-        updateStatus('🔌 대화가 종료되었습니다', '#95a5a6');
-        updateMicStatus('🎤 음성 채팅 시작하기', false);
-        showIndicator('');
+        updateStatus('🛑 모든 작업을 중단했어요!', '#e74c3c');
     }}
     
-    function clearBlackboard() {{
-        streamToBlackboard('<div style="text-align: center; color: #ccc; margin-top: 80px;">칠판이 지워졌습니다.<br>새로운 질문을 해주세요!</div>', true);
-    }}
-    
-    function addToConversationLog(text) {{
-        const logEl = document.getElementById('log-content');
-        const logContainer = document.getElementById('conversation-log');
-        
-        if (logEl && logContainer) {{
-            const timestamp = new Date().toLocaleTimeString();
-            logEl.innerHTML += `<div style="margin: 5px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 5px;">[${timestamp}] ${{text}}</div>`;
-            logEl.scrollTop = logEl.scrollHeight;
-            logContainer.style.display = 'block';
-        }}
-    }}
-    
-    function downloadTranscript() {{
-        const transcript = conversationHistory.map((item, index) => 
-            `[${{new Date().toLocaleString()}}] ${{item.role === 'user' ? '👤 학생' : '🤖 AI 튜터'}}: ${{item.content}}`
-        ).join('\\n\\n');
-        
-        const blob = new Blob([transcript], {{ type: 'text/plain' }});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'ai_tutor_conversation_' + new Date().toISOString().slice(0,10) + '.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }}
-    
-    // 페이지 로드 시 초기화
+    // 초기화
     window.addEventListener('load', function() {{
-        updateStatus('🚀 GPT-4 + Google TTS 준비 완료!');
+        updateStatus('🚀 GPT-4 AI 튜터 준비 완료!', '#2ecc71');
         updateStats();
-        console.log('GPT-4 + Google TTS AI Tutor System Initialized');
-        
-        // 음성 엔진 초기화
-        if (speechSynthesis.getVoices().length === 0) {{
-            speechSynthesis.onvoiceschanged = function() {{
-                console.log('음성 엔진 준비 완료');
-            }};
-        }}
-    }});
-    
-    // 페이지 종료 시 정리
-    window.addEventListener('beforeunload', function() {{
-        stopConversation();
+        console.log('Simple GPT-4 AI Tutor initialized');
     }});
     </script>
     """
@@ -756,34 +448,29 @@ def main():
     # 헤더
     st.markdown(f"""
     <div class="teacher-header">
-        <h1>🎙️ {teacher['name']} 실시간 AI 튜터</h1>
+        <h1>🎙️ {teacher['name']} GPT-4 AI 튜터</h1>
         <p>📚 {teacher['subject']} | 🎯 {teacher['level']} 수준</p>
-        <div class="realtime-badge">🤖 GPT-4 + 🎵 Google TTS</div>
-        <div class="cost-badge">💰 시간당 1,000원 (87% 절약!)</div>
-        <p style="margin-top: 15px; opacity: 0.9;">⚡ 실시간 스트리밍으로 자연스러운 대화 경험!</p>
+        <div class="realtime-badge">🤖 GPT-4 + 🎵 브라우저 TTS</div>
+        <div class="cost-badge">💰 시간당 800원 (초저렴!)</div>
+        <p style="margin-top: 15px; opacity: 0.9;">⚡ 음성으로 질문하고 AI가 칠판에 정리해드려요!</p>
     </div>
     """, unsafe_allow_html=True)
     
     # API 키 확인
     openai_api_key = st.secrets.get('OPENAI_API_KEY', '')
-    google_credentials = st.secrets.get('GOOGLE_CREDENTIALS', '{}')
     
     if not openai_api_key:
         st.error("⚠️ OpenAI API 키가 설정되지 않았습니다.")
         st.info("💡 설정: Streamlit secrets → OPENAI_API_KEY = 'sk-...'")
         return
     
-    if not google_credentials or google_credentials == '{}':
-        st.warning("⚠️ Google TTS 설정이 없습니다. 브라우저 TTS를 사용합니다.")
-        st.info("💡 Google Cloud TTS 설정 시 더 나은 음성 품질을 경험할 수 있습니다.")
-    
     # 메인 레이아웃
     col1, col2 = st.columns([4, 1])
     
     with col1:
-        # GPT-4 + Google TTS 시스템
-        gpt4_system = create_gpt4_google_tts_system(teacher, openai_api_key, google_credentials)
-        st.components.v1.html(gpt4_system, height=950)
+        # 단순화된 GPT-4 시스템
+        simple_system = create_simple_gpt4_system(teacher)
+        st.components.v1.html(simple_system, height=850)
     
     with col2:
         # 컨트롤 패널
@@ -791,66 +478,60 @@ def main():
         
         st.subheader("🎛️ 제어판")
         
-        # 메인 버튼들
+        # 메인 버튼
         if st.button("🏠 메인으로", key="home_btn", use_container_width=True):
             st.switch_page("app.py")
         
         st.markdown("---")
         
-        # 기술 스택 정보
+        # 현재 상태
+        st.subheader("📊 현재 상태")
+        st.success("✅ 시스템 준비 완료")
+        st.info("🎤 마이크 권한 필요")
+        st.warning("⚠️ 현재 시뮬레이션 모드")
+        
+        # 기술 정보
+        st.markdown("---")
         st.subheader("🚀 기술 스택")
         st.markdown("""
         **🎤 음성 인식:** OpenAI Whisper
-        **🤖 AI 대화:** GPT-4 (스트리밍)
-        **🔊 음성 합성:** Google TTS
-        **⚡ 실시간 처리:** JavaScript
+        **🤖 AI 대화:** GPT-4
+        **🔊 음성 합성:** 브라우저 TTS
+        **💻 인터페이스:** JavaScript
         """)
         
         # 비용 정보
-        st.subheader("💰 비용 정보")
+        st.subheader("💰 예상 비용")
         st.markdown("""
-        **예상 비용 (2시간 기준):**
-        - Whisper STT: 312원
-        - GPT-4: 1,209원  
-        - Google TTS: 364원
-        - **총합: 1,885원**
+        **2시간 대화 기준:**
+        - Whisper: 312원
+        - GPT-4: 1,209원
+        - TTS: 0원 (무료)
+        - **총합: 1,521원**
         
-        **vs OpenAI Realtime: 30,000원**
-        **87% 절약! 🎉**
+        **시간당 760원! 😊**
         """)
         
         # 튜터 정보
         st.markdown("---")
-        st.subheader("👨‍🏫 AI 튜터 정보")
+        st.subheader("👨‍🏫 AI 튜터")
         st.write(f"**이름:** {teacher['name']}")
         st.write(f"**전문분야:** {teacher['subject']}")
         st.write(f"**교육수준:** {teacher['level']}")
         
-        personality = teacher.get('personality', {})
-        st.write(f"**친근함:** {personality.get('friendliness', 70)}/100")
-        st.write(f"**유머수준:** {personality.get('humor_level', 30)}/100")
-        st.write(f"**격려수준:** {personality.get('encouragement', 80)}/100")
-        
-        # 사용 팁
+        # 사용법
         st.markdown("---")
-        st.subheader("💡 사용 팁")
+        st.subheader("💡 사용법")
         st.markdown("""
-        **🎤 음성 대화:**
-        1. 큰 마이크 버튼 클릭
-        2. 브라우저 마이크 권한 허용
-        3. 명확하게 질문하기
-        4. AI의 실시간 스트리밍 답변 감상
+        1. **🎤 마이크 버튼 클릭**
+        2. **브라우저 권한 허용**
+        3. **음성으로 질문하기**
+        4. **AI 답변 확인**
         
-        **📝 특징:**
-        - 실시간 텍스트 스트리밍
-        - 문장별 즉시 음성 재생
-        - 칠판 자동 정리
-        - 대화 기록 저장
-        
-        **⚡ 실시간 극대화:**
-        - 0.3초 내 응답 시작
-        - 부드러운 스트리밍
-        - 완벽한 동기화
+        **📝 질문 예시:**
+        - "뉴턴의 법칙 설명해줘"
+        - "피타고라스 정리 알려줘"
+        - "영어 문법 질문있어"
         """)
         
         st.markdown('</div>', unsafe_allow_html=True)
