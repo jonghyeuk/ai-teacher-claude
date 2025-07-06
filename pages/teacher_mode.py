@@ -629,7 +629,7 @@ def create_stable_ai_tutor_system(teacher_config, openai_api_key):
                     
                     // 2단계: GPT-4로 스트리밍 응답
                     const aiResponse = await getGPT4StreamingResponse(userText);
-                    addToConversationLog('🤖 {teacher_name}: ' + aiResponse);
+                    addToConversationLog('🤖 ' + teacherName + ': ' + aiResponse);
                     
                     // 대화 히스토리에 추가
                     conversationHistory.push(
