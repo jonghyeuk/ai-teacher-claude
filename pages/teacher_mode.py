@@ -5,6 +5,16 @@ from datetime import datetime
 import re
 import html
 import base64
+import io
+import tempfile
+import os
+
+# Google Cloud TTS 임포트
+try:
+    from google.cloud import texttospeech
+    GOOGLE_TTS_AVAILABLE = True
+except ImportError:
+    GOOGLE_TTS_AVAILABLE = False
 
 # 페이지 설정
 st.set_page_config(
@@ -66,8 +76,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def create_safe_ai_tutor_system(teacher_config, openai_api_key):
-    """완전히 안전한 GPT-4 + 브라우저 TTS 기반 실시간 AI 튜터 시스템"""
+def create_google_tts_system(teacher_config, openai_api_key, google_credentials):
+    """Google Cloud TTS 연동 실시간 AI 튜터 시스템"""
     
     # 안전한 설정값 추출
     teacher_name = html.escape(teacher_config.get('name', 'AI 튜터'))
@@ -79,7 +89,7 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
     humor_level = personality.get('humor_level', 30)
     encouragement = personality.get('encouragement', 80)
     
-    # 시스템 프롬프트 생성 (안전하게)
+    # 시스템 프롬프트 생성
     system_prompt = f"""당신은 {teacher_name}이라는 이름의 AI 튜터입니다.
 {subject} 분야의 전문가이며, {level} 수준의 학생들을 가르칩니다.
 
@@ -103,7 +113,63 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
 대화할 때는 자연스럽게 "음~", "그러니까", "잠깐만" 같은 추임새를 사용하고,
 학생이 이해했는지 중간중간 확인해주세요."""
 
-    # 안전한 HTML 코드 (Template Literal 완전 제거)
+    # Google TTS 설정 확인
+    google_tts_enabled = GOOGLE_TTS_AVAILABLE and google_credentials != '{}'
+    
+    # TTS 상태 메시지
+    tts_status = "🔊 Google Cloud TTS" if google_tts_enabled else "🔊 브라우저 TTS (업그레이드 권장)"
+    tts_badge_color = "#28a745" if google_tts_enabled else "#ffc107"
+
+# Google Cloud TTS 함수
+def generate_google_tts_audio(text, google_credentials):
+    """Google Cloud TTS를 사용하여 오디오 생성"""
+    try:
+        if not GOOGLE_TTS_AVAILABLE or not google_credentials or google_credentials == '{}':
+            return None
+            
+        # Google Cloud 인증 설정
+        credentials_info = json.loads(google_credentials)
+        
+        # TTS 클라이언트 생성
+        client = texttospeech.TextToSpeechClient.from_service_account_info(credentials_info)
+        
+        # 음성 합성 요청 설정
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+        
+        # 음성 설정 (한국어 고품질)
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="ko-KR",
+            name="ko-KR-Wavenet-A",  # 고품질 WaveNet 음성
+            ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+        )
+        
+        # 오디오 설정
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=1.2,  # 약간 빠르게
+            pitch=0.0
+        )
+        
+        # TTS 요청 실행
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        
+        # Base64 인코딩하여 반환
+        audio_base64 = base64.b64encode(response.audio_content).decode('utf-8')
+        return audio_base64
+        
+    except Exception as e:
+        print(f"Google TTS Error: {e}")
+        return None
+
+# TTS 오디오 생성 및 캐싱
+@st.cache_data(ttl=3600)  # 1시간 캐싱
+def get_cached_tts_audio(text, google_credentials):
+    """캐시된 TTS 오디오 생성"""
+    return generate_google_tts_audio(text, google_credentials)
     html_content = f"""
     <div style="background: #0a0a0a; border-radius: 20px; padding: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.7);">
         
@@ -119,14 +185,14 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
             <p style="margin: 5px 0; opacity: 0.9;">{teacher_name} | {subject} | {level}</p>
             
             <div style="margin: 15px 0;">
-                <span style="background: linear-gradient(45deg, #28a745, #20c997); 
+                <span style="background: linear-gradient(45deg, {tts_badge_color}, #20c997); 
                              color: white; 
                              padding: 8px 20px; 
                              border-radius: 25px; 
                              font-size: 14px; 
                              font-weight: bold; 
                              margin: 5px;">
-                    🤖 GPT-4 Streaming + 🔊 브라우저 TTS
+                    🤖 GPT-4 Streaming + {tts_status}
                 </span>
                 <br>
                 <span style="background: linear-gradient(45deg, #ffc107, #fd7e14); 
@@ -212,7 +278,24 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
                                cursor: pointer; 
                                margin: 5px;">
                     🗑️ 칠판 지우기
-                </button>
+                </button>"""
+    
+    # Google TTS 데모 버튼 추가
+    if tts_demo_available:
+        html_content += f"""
+                <button onclick="playGoogleTTSDemo()" 
+                        style="padding: 12px 25px; 
+                               background: #28a745; 
+                               color: white; 
+                               border: none; 
+                               border-radius: 25px; 
+                               font-weight: bold; 
+                               cursor: pointer; 
+                               margin: 5px;">
+                    🎵 Google TTS 데모
+                </button>"""
+    
+    html_content += """
                 <button onclick="downloadTranscript()" 
                         style="padding: 12px 25px; 
                                background: #27ae60; 
@@ -524,16 +607,65 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
         }}
     }}
     
-    // 브라우저 TTS
-    function speakTextNonBlocking(text) {{
+    # JavaScript 코드 (Google TTS 데모 포함)
+    html_content += f"""
+    <script>
+    // 전역 변수
+    var isRecording = false;
+    var mediaRecorder = null;
+    var audioStream = null;
+    var conversationHistory = [];
+    var openaiApiKey = '{openai_api_key}';
+    var teacherName = '{teacher_name}';
+    var questionCount = 0;
+    var conversationStartTime = null;
+    var totalCost = 0;
+    var googleTtsEnabled = {str(tts_demo_available).lower()};
+    
+    // Google TTS 샘플 오디오 (Base64)
+    var googleTtsSample = {f'"{sample_audio}"' if sample_audio else 'null'};
+    
+    // 시스템 프롬프트
+    var systemPrompt = `{system_prompt}`;
+    
+    // Google TTS 데모 재생
+    function playGoogleTTSDemo() {{
+        if (googleTtsSample) {{
+            try {{
+                var audio = new Audio('data:audio/mp3;base64,' + googleTtsSample);
+                audio.play();
+                
+                updateStatus('🎵 Google TTS 데모 재생 중...', '#28a745');
+                
+                audio.onended = function() {{
+                    updateStatus('🚀 실시간 AI 튜터 시스템 준비 완료!', '#2ecc71');
+                }};
+                
+                audio.onerror = function() {{
+                    updateStatus('❌ Google TTS 재생 오류', '#e74c3c');
+                }};
+                
+            }} catch (error) {{
+                console.error('Google TTS Demo Error:', error);
+                updateStatus('❌ Google TTS 데모 재생 실패', '#e74c3c');
+            }}
+        }} else {{
+            updateStatus('❌ Google TTS 샘플이 없습니다', '#e74c3c');
+        }}
+    }}
+    
+    // 하이브리드 TTS (브라우저 TTS 우선, 향후 Google TTS 통합)
+    function speakTextHybrid(text) {{
         try {{
             if (!text.trim()) return;
             
+            // 현재는 브라우저 TTS 사용 (실시간성 우선)
             var utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ko-KR';
             utterance.rate = 1.2;
             utterance.pitch = 1.0;
             
+            // 한국어 음성 찾기
             var voices = speechSynthesis.getVoices();
             var koreanVoice = voices.find(function(voice) {{
                 return voice.lang && voice.lang.toLowerCase().includes('ko');
@@ -549,10 +681,17 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
                 showIndicator('listening');
             }};
             
+            // TODO: 향후 Google TTS 백그라운드 처리 추가
+            
         }} catch (error) {{
-            console.error('TTS Error:', error);
+            console.error('Hybrid TTS Error:', error);
         }}
     }}
+    
+    // TTS 함수 (하이브리드 사용)
+    function speakTextNonBlocking(text) {{
+        speakTextHybrid(text);
+    }}"""
     
     // 음성 채팅 토글
     async function toggleVoiceChat() {{
@@ -718,7 +857,119 @@ def create_safe_ai_tutor_system(teacher_config, openai_api_key):
     </script>
     """
     
-    return html_content
+# TTS 요청 처리 시스템
+def setup_tts_system():
+    """TTS 요청 처리 시스템 초기화"""
+    if 'tts_requests' not in st.session_state:
+        st.session_state.tts_requests = []
+    if 'tts_responses' not in st.session_state:
+        st.session_state.tts_responses = {}
+
+def process_tts_requests(google_credentials):
+    """대기 중인 TTS 요청 처리"""
+    setup_tts_system()
+    
+    if st.session_state.tts_requests:
+        for request in st.session_state.tts_requests[:]:  # 복사본으로 반복
+            request_id = request['id']
+            text = request['text']
+            
+            # 이미 처리된 요청은 건너뛰기
+            if request_id in st.session_state.tts_responses:
+                continue
+            
+            # Google TTS 처리
+            audio_base64 = get_cached_tts_audio(text, google_credentials)
+            
+            # 결과 저장
+            st.session_state.tts_responses[request_id] = {
+                'audio_base64': audio_base64,
+                'success': audio_base64 is not None,
+                'timestamp': time.time()
+            }
+            
+            # 처리된 요청 제거
+            st.session_state.tts_requests.remove(request)
+
+def get_tts_javascript_bridge():
+    """JavaScript-Python TTS 브리지 코드"""
+    return """
+    // TTS 요청 ID 생성
+    var ttsRequestCounter = 0;
+    var pendingTtsRequests = new Map();
+    
+    // Python으로 TTS 요청 전송
+    function requestGoogleTTS(text) {
+        var requestId = 'tts_' + (++ttsRequestCounter) + '_' + Date.now();
+        
+        // TTS 요청을 Streamlit session state에 추가
+        window.parent.postMessage({
+            type: 'streamlit:tts_request',
+            data: {
+                id: requestId,
+                text: text
+            }
+        }, '*');
+        
+        // 응답 대기
+        pendingTtsRequests.set(requestId, {
+            text: text,
+            timestamp: Date.now()
+        });
+        
+        // 5초 후 타임아웃
+        setTimeout(function() {
+            if (pendingTtsRequests.has(requestId)) {
+                console.log('TTS 요청 타임아웃:', requestId);
+                pendingTtsRequests.delete(requestId);
+                // 브라우저 TTS로 대체
+                speakTextFallback(text);
+            }
+        }, 5000);
+        
+        return requestId;
+    }
+    
+    // TTS 응답 확인
+    function checkTtsResponses() {
+        // Streamlit에서 TTS 응답 확인
+        window.parent.postMessage({
+            type: 'streamlit:get_tts_responses'
+        }, '*');
+    }
+    
+    // TTS 응답 처리
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'streamlit:tts_response') {
+            var responses = event.data.data;
+            
+            for (var requestId in responses) {
+                if (pendingTtsRequests.has(requestId)) {
+                    var response = responses[requestId];
+                    
+                    if (response.success && response.audio_base64) {
+                        // Google TTS 오디오 재생
+                        var audio = new Audio('data:audio/mp3;base64,' + response.audio_base64);
+                        audio.play();
+                        
+                        console.log('Google TTS 재생 성공:', requestId);
+                    } else {
+                        // 실패 시 브라우저 TTS 대체
+                        var request = pendingTtsRequests.get(requestId);
+                        speakTextFallback(request.text);
+                        
+                        console.log('Google TTS 실패, 브라우저 TTS 사용:', requestId);
+                    }
+                    
+                    pendingTtsRequests.delete(requestId);
+                }
+            }
+        }
+    });
+    
+    // 주기적으로 TTS 응답 확인 (500ms마다)
+    setInterval(checkTtsResponses, 500);
+    """
 
 def initialize_teacher():
     """AI 튜터 초기화"""
