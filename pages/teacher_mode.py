@@ -6,26 +6,28 @@ import re
 
 # 페이지 설정
 st.set_page_config(
-    page_title="🎤 AI 튜터",
+    page_title="🎤 GPT-4 AI 튜터",
     page_icon="🎙️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Claude API 응답 함수
-def get_claude_response(user_message, system_prompt, chat_history):
-    """Claude API 응답 생성"""
+# GPT-4 API 응답 함수
+def get_gpt4_response(user_message, system_prompt, chat_history):
+    """GPT-4 API 응답 생성"""
     try:
-        from anthropic import Anthropic
+        import openai
         
-        api_key = st.secrets.get('ANTHROPIC_API_KEY')
+        api_key = st.secrets.get('OPENAI_API_KEY')
         if not api_key:
-            return "Claude API 키가 설정되지 않았습니다. Streamlit secrets에 ANTHROPIC_API_KEY를 설정해주세요."
+            return "OpenAI API 키가 설정되지 않았습니다. Streamlit secrets에 OPENAI_API_KEY를 설정해주세요."
         
-        client = Anthropic(api_key=api_key)
+        client = openai.OpenAI(api_key=api_key)
         
-        messages = []
-        for msg in chat_history[-10:]:  # 최근 10개만 유지
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # 최근 10개 대화만 유지
+        for msg in chat_history[-10:]:
             if msg['role'] in ['user', 'assistant']:
                 messages.append({
                     "role": msg['role'],
@@ -37,15 +39,14 @@ def get_claude_response(user_message, system_prompt, chat_history):
             "content": user_message
         })
         
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=messages,
             max_tokens=800,
-            temperature=0.7,
-            system=system_prompt,
-            messages=messages
+            temperature=0.7
         )
         
-        return response.content[0].text
+        return response.choices[0].message.content
         
     except Exception as e:
         return f"응답 생성 중 오류가 발생했습니다: {str(e)}"
@@ -121,19 +122,19 @@ def main():
                 border-radius: 15px; 
                 text-align: center; 
                 margin-bottom: 20px;">
-        <h1>🎙️ {teacher['name']} AI 튜터</h1>
+        <h1>🎙️ {teacher['name']} GPT-4 AI 튜터</h1>
         <p>📚 {teacher['subject']} | 🎯 {teacher['level']} 수준</p>
         <p>💬 자연스러운 대화로 학습하세요!</p>
     </div>
     """, unsafe_allow_html=True)
     
     # API 키 확인
-    claude_key = st.secrets.get('ANTHROPIC_API_KEY', '')
+    openai_key = st.secrets.get('OPENAI_API_KEY', '')
     
-    if not claude_key:
-        st.error("⚠️ Claude API 키가 설정되지 않았습니다.")
-        st.info("💡 Streamlit secrets에 ANTHROPIC_API_KEY를 설정해주세요.")
-        st.code("ANTHROPIC_API_KEY = 'sk-ant-...'", language="toml")
+    if not openai_key:
+        st.error("⚠️ OpenAI API 키가 설정되지 않았습니다.")
+        st.info("💡 Streamlit secrets에 OPENAI_API_KEY를 설정해주세요.")
+        st.code("OPENAI_API_KEY = 'sk-proj-...'", language="toml")
         return
     
     # 메인 레이아웃
@@ -170,8 +171,8 @@ def main():
                 # 시스템 프롬프트 생성
                 system_prompt = generate_system_prompt(teacher)
                 
-                # Claude API 호출
-                ai_response = get_claude_response(user_question, system_prompt, st.session_state.chat_history)
+                # GPT-4 API 호출
+                ai_response = get_gpt4_response(user_question, system_prompt, st.session_state.chat_history)
                 
                 # 대화 히스토리에 추가
                 st.session_state.chat_history.append({
@@ -228,7 +229,7 @@ def main():
                                     border-radius: 10px; 
                                     margin: 10px 0; 
                                     border-left: 4px solid #9c27b0;">
-                            <strong>🤖 {teacher['name']} AI 튜터 [{timestamp}]:</strong>
+                            <strong>🤖 {teacher['name']} GPT-4 튜터 [{timestamp}]:</strong>
                         </div>
                         """, unsafe_allow_html=True)
                         
@@ -269,7 +270,7 @@ def main():
         else:
             # 시작 안내
             st.info("""
-            👋 안녕하세요! AI 튜터와의 첫 대화를 시작해보세요.
+            👋 안녕하세요! GPT-4 AI 튜터와의 첫 대화를 시작해보세요.
             
             **💡 질문 예시:**
             - "안녕하세요! 자기소개 해주세요"
@@ -286,7 +287,7 @@ def main():
         
         # 현재 상태
         st.subheader("📊 현재 상태")
-        st.success("✅ Claude API 연결됨")
+        st.success("✅ GPT-4 API 연결됨")
         st.info(f"💬 대화 수: {len(st.session_state.chat_history)//2}회")
         
         # 튜터 정보
@@ -304,7 +305,7 @@ def main():
         st.subheader("💡 사용법")
         st.markdown("""
         **🎯 현재 기능:**
-        - ✅ **진짜 AI 대화** (Claude 연동)
+        - ✅ **진짜 AI 대화** (GPT-4 연동)
         - ✅ **대화 맥락 유지** (이전 대화 기억)
         - ✅ **자연스러운 대화** (연속 질답)
         - ✅ **음성으로 듣기** (간단한 TTS)
@@ -315,8 +316,8 @@ def main():
         - "더 쉽게 설명해주세요" 같은 요청 가능
         
         **🚀 업데이트 예정:**
-        - 실시간 음성 인식
-        - 고급 음성 합성
+        - 실시간 음성 인식 (Whisper)
+        - 고급 음성 합성 (Google TTS)
         - 실시간 스트리밍
         """)
         
