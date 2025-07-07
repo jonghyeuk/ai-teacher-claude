@@ -1,434 +1,610 @@
-"""
-실시간 AI 튜터 시스템 - FastAPI 백엔드 서버
-2단계: 성능과 비용의 균형 구성
-- STT: Google Cloud Speech-to-Text Streaming 
-- LLM: GPT-3.5 Turbo Streaming (비용 최적화)
-- TTS: Google Cloud TTS Standard (비용 최적화)
-- 배포: Google Cloud Run (Scale to Zero)
-"""
-
-import asyncio
+import streamlit as st
+import streamlit.components.v1 as components
 import json
-import base64
-import io
-import os
-from datetime import datetime
-from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-
-# OpenAI 및 Google Cloud (신버전)
-from openai import AsyncOpenAI
-from google.cloud import texttospeech
-
-# 오디오 처리
-import numpy as np
-import soundfile as sf
-
-# 환경 설정 (Cloud Run 환경변수에서 로드)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-openai-api-key")
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
-# FastAPI 앱 초기화
-app = FastAPI(
-    title="AI Tutor Realtime System", 
-    version="2.0.0",
-    description="실시간 음성 대화 AI 튜터 (성능과 비용 균형 구성)"
+# 페이지 설정
+st.set_page_config(
+    page_title="AI 튜터 실시간 대화",
+    page_icon="🎓",
+    layout="wide"
 )
 
-# CORS 설정 (Streamlit Cloud와 통신용)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://*.streamlit.app",  # Streamlit Cloud 도메인
-        "https://streamlit.app",
-        "http://localhost:*",  # 로컬 개발용
-        "*"  # 개발용 (프로덕션에서는 제거)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 튜터 설정 확인
+if 'selected_teacher' not in st.session_state:
+    st.error("⚠️ 튜터 설정이 없습니다. 먼저 AI 튜터를 생성해주세요.")
+    if st.button("🏠 AI 튜터 팩토리로 돌아가기"):
+        st.switch_page("app.py")
+    st.stop()
 
-# 클라이언트 초기화
-openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+teacher_config = st.session_state.selected_teacher
 
-# Google TTS 클라이언트 초기화
-try:
-    tts_client = texttospeech.TextToSpeechClient()
-    print("✅ Google TTS 클라이언트 초기화 완료")
-except Exception as e:
-    print(f"⚠️ Google TTS 클라이언트 초기화 실패: {e}")
-    tts_client = None
+# 헤더
+st.title(f"🎓 {teacher_config['name']} 선생님과의 실시간 대화")
+st.markdown(f"**전문 분야:** {teacher_config['subject']} | **수준:** {teacher_config['level']}")
 
-class ConnectionManager:
-    """WebSocket 연결 관리자"""
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-    
-    async def connect(self, websocket: WebSocket, client_id: str):
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-        print(f"✅ 클라이언트 {client_id} 연결됨 (총 {len(self.active_connections)}개)")
-    
-    def disconnect(self, client_id: str):
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
-            print(f"❌ 클라이언트 {client_id} 연결 해제됨 (총 {len(self.active_connections)}개)")
-    
-    async def send_message(self, message: dict, client_id: str):
-        if client_id in self.active_connections:
-            try:
-                websocket = self.active_connections[client_id]
-                await websocket.send_json(message)
-            except Exception as e:
-                print(f"⚠️ 메시지 전송 실패 ({client_id}): {e}")
-                self.disconnect(client_id)
-    
-    async def send_audio(self, audio_data: bytes, client_id: str):
-        if client_id in self.active_connections:
-            try:
-                websocket = self.active_connections[client_id]
-                await websocket.send_bytes(audio_data)
-            except Exception as e:
-                print(f"⚠️ 오디오 전송 실패 ({client_id}): {e}")
-                self.disconnect(client_id)
+# 서버 URL 설정
+WEBSOCKET_URL = "wss://ai-teacher-611312919059.asia-northeast3.run.app/ws/tutor/user1"
 
-manager = ConnectionManager()
+# 상태 표시
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("튜터", teacher_config['name'], f"{teacher_config['subject']}")
+with col2:
+    st.metric("성격", f"친근함 {teacher_config['personality']['friendliness']}%", "")
+with col3:
+    st.metric("백엔드", "🟢 정상", "Cloud Run")
+with col4:
+    st.metric("AI 모델", "GPT-3.5", "비용 최적화")
 
-class AITutorPipeline:
-    """AI 튜터 파이프라인 (STT → LLM → TTS)"""
-    
-    def __init__(self, teacher_config: dict):
-        self.teacher_config = teacher_config
-        self.conversation_history = []
-        self.system_prompt = self._create_system_prompt()
-    
-    def _create_system_prompt(self) -> str:
-        teacher_name = self.teacher_config.get('name', 'AI 튜터')
-        subject = self.teacher_config.get('subject', '일반')
-        level = self.teacher_config.get('level', '중급')
+st.divider()
+
+# 대화 영역
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    st.subheader("🎙️ 음성 대화")
+
+with col2:
+    if st.button("🏠 튜터 변경"):
+        st.switch_page("app.py")
+
+# WebSocket HTML Component
+websocket_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 80vh;
+        }}
+        .container {{
+            max-width: 100%;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }}
+        .teacher-info {{
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }}
+        .status {{
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+        .status-dot {{
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }}
+        .connected {{ background: #4CAF50; }}
+        .disconnected {{ background: #f44336; }}
+        .connecting {{ background: #ff9800; animation: pulse 1s infinite; }}
         
-        return f"""당신은 {teacher_name}이라는 이름의 AI 튜터입니다.
-{subject} 분야의 전문가이며, {level} 수준의 학생들을 가르칩니다.
-
-교육 방식:
-- 학생의 수준에 맞춰 설명
-- 이해하기 쉬운 예시 활용  
-- 질문을 격려하고 친근하게 응답
-- 중요한 내용은 강조하여 설명
-
-답변할 때는 자연스럽게 "음~", "그러니까", "잠깐만" 같은 추임새를 사용하고,
-학생이 이해했는지 중간중간 확인해주세요.
-
-답변은 간결하면서도 이해하기 쉽게 해주세요. 한 번에 너무 긴 설명보다는 
-대화형으로 진행해주세요."""
-
-    async def process_audio_to_text(self, audio_data: bytes) -> str:
-        """
-        오디오 데이터를 텍스트로 변환
+        @keyframes pulse {{
+            0% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+            100% {{ opacity: 1; }}
+        }}
         
-        TODO: Google Cloud Speech-to-Text Streaming API 연동
-        현재는 임시 구현 (실제 STT 구현 시 교체 필요)
-        """
-        try:
-            print(f"🎤 오디오 데이터 수신: {len(audio_data)} bytes")
+        .controls {{
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        
+        .btn {{
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .btn-record {{
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+        }}
+        
+        .btn-record:hover:not(:disabled) {{
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(238, 90, 36, 0.3);
+        }}
+        
+        .btn-record:disabled {{
+            background: #6c757d;
+            cursor: not-allowed;
+        }}
+        
+        .btn-stop {{
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+        }}
+        
+        .btn-stop:hover:not(:disabled) {{
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(108, 117, 125, 0.3);
+        }}
+        
+        .btn-stop:disabled {{
+            background: #6c757d;
+            cursor: not-allowed;
+        }}
+        
+        .chat-area {{
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }}
+        
+        .message {{
+            margin-bottom: 15px;
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+            word-wrap: break-word;
+        }}
+        
+        .user-message {{
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            margin-left: auto;
+            text-align: right;
+        }}
+        
+        .ai-message {{
+            background: rgba(255, 255, 255, 0.15);
+            margin-right: auto;
+        }}
+        
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        .typing {{
+            display: none;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 200px;
+            margin-bottom: 15px;
+        }}
+        
+        .typing-dots {{
+            display: flex;
+            gap: 4px;
+        }}
+        
+        .typing-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.7);
+            animation: typing 1.4s infinite;
+        }}
+        
+        .typing-dot:nth-child(2) {{ animation-delay: 0.2s; }}
+        .typing-dot:nth-child(3) {{ animation-delay: 0.4s; }}
+        
+        @keyframes typing {{
+            0%, 60%, 100% {{ transform: translateY(0); }}
+            30% {{ transform: translateY(-10px); }}
+        }}
+        
+        .info {{
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 15px;
+        }}
+        
+        .error {{
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="teacher-info">
+            <h2>👨‍🏫 {teacher_config['name']} 선생님</h2>
+            <p>{teacher_config['subject']} 전문 | {teacher_config['level']} 수준</p>
+            <small>친근함: {teacher_config['personality']['friendliness']}% | 
+                   유머: {teacher_config['personality']['humor_level']}% | 
+                   격려: {teacher_config['personality']['encouragement']}%</small>
+        </div>
+        
+        <div class="status">
+            <span class="status-dot disconnected" id="statusDot"></span>
+            <span id="statusText">연결 중...</span>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-record" id="recordBtn" onclick="startRecording()" disabled>
+                🎤 음성 녹음 시작
+            </button>
+            <button class="btn btn-stop" id="stopBtn" onclick="stopRecording()" disabled>
+                ⏹️ 녹음 중지
+            </button>
+        </div>
+        
+        <div class="chat-area" id="chatArea">
+            <div class="message ai-message">
+                안녕하세요! 저는 {teacher_config['name']} 선생님입니다. 🎓<br>
+                {teacher_config['subject']} 분야에 대해 무엇이든 물어보세요!
+            </div>
+        </div>
+        
+        <div class="typing" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        
+        <div class="info">
+            💡 마이크 버튼을 눌러 질문하세요. AI 튜터가 실시간으로 답변해드립니다.
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const chatArea = document.getElementById('chatArea');
+        const typingIndicator = document.getElementById('typingIndicator');
+        
+        // 튜터 설정
+        const teacherConfig = {json.dumps(teacher_config)};
+        
+        // WebSocket 연결
+        function connectWebSocket() {{
+            const wsUrl = '{WEBSOCKET_URL}';
+            console.log('연결 시도:', wsUrl);
             
-            # TODO: 실제 STT 구현
-            # Google Cloud Speech-to-Text Streaming API 또는 Deepgram 연동
+            statusDot.className = 'status-dot connecting';
+            statusText.textContent = '연결 중...';
             
-            # 임시 테스트용 텍스트들 (실제 구현 시 제거)
-            test_texts = [
-                "안녕하세요, 뉴턴의 법칙에 대해 설명해주세요.",
-                "미적분학이 어려워요. 쉽게 설명해주실 수 있나요?",
-                "물리학과 수학의 관계에 대해 궁금해요.",
-                "과제 도움이 필요해요."
-            ]
+            websocket = new WebSocket(wsUrl);
             
-            import random
-            return random.choice(test_texts)
-            
-        except Exception as e:
-            print(f"❌ STT 오류: {e}")
-            return ""
-    
-    async def generate_response_stream(self, user_text: str, client_id: str):
-        """GPT-3.5 Turbo 스트리밍 응답 생성 및 실시간 TTS"""
-        try:
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                *self.conversation_history[-10:],  # 최근 10개 대화만 유지
-                {"role": "user", "content": user_text}
-            ]
-            
-            print(f"🤖 GPT-3.5 Turbo 스트리밍 시작: {user_text[:50]}...")
-            
-            # GPT-3.5 Turbo 스트리밍 호출 (비용 최적화)
-            response = await openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",  # 비용 절약
-                messages=messages,
-                stream=True,
-                temperature=0.7,
-                max_tokens=300  # 응답 길이 제한으로 비용 절약
-            )
-            
-            current_sentence = ""
-            full_response = ""
-            
-            async for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    current_sentence += content
-                    full_response += content
-                    
-                    # 문장 단위로 TTS 처리 (자연스러운 실시간 음성)
-                    if any(punct in content for punct in ['.', '!', '?', '다', '요', '죠', '니다']):
-                        sentence = current_sentence.strip()
-                        if len(sentence) > 5:  # 너무 짧은 문장 제외
-                            await self.text_to_speech_and_send(sentence, client_id)
-                            current_sentence = ""
-            
-            # 마지막 남은 텍스트 처리
-            if current_sentence.strip():
-                await self.text_to_speech_and_send(current_sentence.strip(), client_id)
-            
-            # 대화 히스토리에 추가
-            self.conversation_history.extend([
-                {"role": "user", "content": user_text},
-                {"role": "assistant", "content": full_response}
-            ])
-            
-            print(f"✅ 응답 완료: {len(full_response)} 글자")
-            return full_response
-            
-        except Exception as e:
-            print(f"❌ GPT 스트리밍 오류: {e}")
-            await manager.send_message({
-                "type": "error",
-                "message": f"응답 생성 중 오류가 발생했습니다: {str(e)}"
-            }, client_id)
-    
-    async def text_to_speech_and_send(self, text: str, client_id: str):
-        """텍스트를 Google TTS Standard로 변환하고 클라이언트에 전송"""
-        try:
-            if not tts_client:
-                print("⚠️ TTS 클라이언트가 초기화되지 않았습니다.")
-                # TTS 없이 텍스트만 전송
-                await manager.send_message({
-                    "type": "text_chunk",
-                    "content": text,
-                    "audio": False
-                }, client_id)
-                return
-            
-            # Google TTS 설정 (Standard 모델로 비용 절약)
-            synthesis_input = texttospeech.SynthesisInput(text=text)
-            voice = texttospeech.VoiceSelectionParams(
-                language_code="ko-KR",
-                name="ko-KR-Standard-A",  # WaveNet 대신 Standard (비용 1/4)
-                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
-            )
-            audio_config = texttospeech.AudioConfig(
-                audio_encoding=texttospeech.AudioEncoding.MP3,
-                speaking_rate=1.1,  # 자연스러운 속도
-                pitch=0.0
-            )
-            
-            print(f"🎵 TTS 생성 중: {text[:30]}...")
-            
-            response = tts_client.synthesize_speech(
-                input=synthesis_input,
-                voice=voice,
-                audio_config=audio_config
-            )
-            
-            # Base64로 인코딩하여 JSON으로 전송
-            audio_base64 = base64.b64encode(response.audio_content).decode('utf-8')
-            
-            await manager.send_message({
-                "type": "audio_chunk",
-                "content": text,
-                "audio": audio_base64,
-                "format": "mp3"
-            }, client_id)
-            
-            print(f"✅ TTS 전송 완료: {len(response.audio_content)} bytes")
+            websocket.onopen = function(event) {{
+                console.log('WebSocket 연결 성공');
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = '연결됨 ✅';
+                recordBtn.disabled = false;
                 
-        except Exception as e:
-            print(f"❌ TTS 오류: {e}")
-            # TTS 실패 시 텍스트만 전송
-            await manager.send_message({
-                "type": "text_chunk",
-                "content": text,
-                "audio": False,
-                "error": "TTS 생성 실패"
-            }, client_id)
-
-# WebSocket 엔드포인트
-@app.websocket("/ws/tutor/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await manager.connect(websocket, client_id)
-    
-    # 기본 튜터 설정 (클라이언트에서 커스터마이징 가능)
-    teacher_config = {
-        "name": "김선생",
-        "subject": "수학",
-        "level": "고등학교",
-        "personality": {
-            "friendliness": 80,
-            "humor_level": 40,
-            "encouragement": 90
-        }
-    }
-    
-    pipeline = AITutorPipeline(teacher_config)
-    
-    try:
-        # 연결 확인 메시지
-        await manager.send_message({
-            "type": "connection_established",
-            "message": f"🎓 AI 튜터 {teacher_config['name']}과 연결되었습니다!",
-            "config": teacher_config
-        }, client_id)
-        
-        while True:
-            try:
-                # 클라이언트로부터 데이터 수신
-                data = await websocket.receive()
-                
-                if data["type"] == "websocket.receive":
-                    if "bytes" in data:
-                        # 오디오 데이터 수신 (마이크 입력)
-                        audio_data = data["bytes"]
-                        print(f"🎤 오디오 수신: {len(audio_data)} bytes")
-                        
-                        # STT 처리
-                        user_text = await pipeline.process_audio_to_text(audio_data)
-                        
-                        if user_text:
-                            # STT 결과 전송
-                            await manager.send_message({
-                                "type": "stt_result",
-                                "text": user_text
-                            }, client_id)
-                            
-                            # GPT-3.5 응답 생성 및 TTS 스트리밍
-                            await pipeline.generate_response_stream(user_text, client_id)
-                    
-                    elif "text" in data:
-                        # 텍스트 메시지 수신 (설정 변경, 텍스트 입력 등)
-                        try:
-                            message = json.loads(data["text"])
-                            
-                            if message["type"] == "config_update":
-                                # 튜터 설정 업데이트
-                                teacher_config.update(message["config"])
-                                pipeline = AITutorPipeline(teacher_config)
-                                
-                                await manager.send_message({
-                                    "type": "config_updated",
-                                    "message": "✅ 설정이 업데이트되었습니다.",
-                                    "config": teacher_config
-                                }, client_id)
-                            
-                            elif message["type"] == "text_input":
-                                # 텍스트 직접 입력 (오디오 없이)
-                                user_text = message["text"]
-                                await pipeline.generate_response_stream(user_text, client_id)
-                                
-                        except json.JSONDecodeError:
-                            await manager.send_message({
-                                "type": "error",
-                                "message": "잘못된 메시지 형식입니다."
-                            }, client_id)
+                // 튜터 설정 전송
+                const configMessage = {{
+                    type: "config_update",
+                    config: {{
+                        name: teacherConfig.name,
+                        subject: teacherConfig.subject,
+                        level: teacherConfig.level,
+                        personality: teacherConfig.personality
+                    }}
+                }};
+                websocket.send(JSON.stringify(configMessage));
+            }};
             
-            except Exception as e:
-                print(f"⚠️ 메시지 처리 오류: {e}")
-                await manager.send_message({
-                    "type": "error",
-                    "message": "메시지 처리 중 오류가 발생했습니다."
-                }, client_id)
+            websocket.onmessage = function(event) {{
+                console.log('메시지 수신:', event.data);
+                
+                try {{
+                    const message = JSON.parse(event.data);
+                    handleServerMessage(message);
+                }} catch (e) {{
+                    console.log('텍스트 메시지:', event.data);
+                }}
+            }};
+            
+            websocket.onclose = function(event) {{
+                console.log('WebSocket 연결 종료');
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = '연결 끊김 ❌';
+                recordBtn.disabled = true;
+                stopBtn.disabled = true;
+                
+                // 5초 후 재연결 시도
+                setTimeout(() => {{
+                    if (!websocket || websocket.readyState === WebSocket.CLOSED) {{
+                        connectWebSocket();
+                    }}
+                }}, 5000);
+            }};
+            
+            websocket.onerror = function(error) {{
+                console.error('WebSocket 에러:', error);
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = '연결 오류 ❌';
+                showError('WebSocket 연결에 실패했습니다. 네트워크를 확인해주세요.');
+            }};
+        }}
+        
+        // 서버 메시지 처리
+        function handleServerMessage(message) {{
+            console.log('서버 메시지:', message);
+            
+            switch(message.type) {{
+                case 'connection_established':
+                    addMessage('ai', message.message);
+                    break;
+                    
+                case 'config_updated':
+                    console.log('튜터 설정 업데이트 완료');
+                    break;
+                    
+                case 'stt_result':
+                    addMessage('user', message.text);
+                    showTyping();
+                    break;
+                    
+                case 'audio_chunk':
+                    hideTyping();
+                    addMessage('ai', message.content);
+                    if (message.audio && teacherConfig.voice_settings.auto_play) {{
+                        playAudio(message.audio);
+                    }}
+                    break;
+                    
+                case 'text_chunk':
+                    hideTyping();
+                    addMessage('ai', message.content);
+                    break;
+                    
+                case 'error':
+                    hideTyping();
+                    showError(message.message);
+                    break;
+            }}
+        }}
+        
+        // 메시지 추가
+        function addMessage(sender, text) {{
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${{sender}}-message`;
+            messageDiv.innerHTML = text;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }}
+        
+        // 에러 표시
+        function showError(errorText) {{
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = '❌ ' + errorText;
+            chatArea.appendChild(errorDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }}
+        
+        // 타이핑 표시
+        function showTyping() {{
+            typingIndicator.style.display = 'block';
+        }}
+        
+        function hideTyping() {{
+            typingIndicator.style.display = 'none';
+        }}
+        
+        // 오디오 재생
+        function playAudio(base64Audio) {{
+            try {{
+                const audioBlob = base64ToBlob(base64Audio, 'audio/mp3');
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.play().then(() => {{
+                    console.log('오디오 재생 시작');
+                }}).catch(error => {{
+                    console.error('오디오 재생 실패:', error);
+                    // 사용자 상호작용이 필요한 경우
+                    if (error.name === 'NotAllowedError') {{
+                        showError('브라우저에서 자동 재생이 차단되었습니다. 화면을 클릭한 후 다시 시도해주세요.');
+                    }}
+                }});
+                
+                // 메모리 정리
+                audio.onended = () => {{
+                    URL.revokeObjectURL(audioUrl);
+                }};
+            }} catch (error) {{
+                console.error('오디오 처리 오류:', error);
+            }}
+        }}
+        
+        // Base64를 Blob으로 변환
+        function base64ToBlob(base64, mimeType) {{
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {{
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }}
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], {{type: mimeType}});
+        }}
+        
+        // 녹음 시작
+        async function startRecording() {{
+            try {{
+                const stream = await navigator.mediaDevices.getUserMedia({{ 
+                    audio: {{
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    }} 
+                }});
+                
+                mediaRecorder = new MediaRecorder(stream, {{
+                    mimeType: 'audio/webm;codecs=opus'
+                }});
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = function(event) {{
+                    if (event.data.size > 0) {{
+                        audioChunks.push(event.data);
+                    }}
+                }};
+                
+                mediaRecorder.onstop = function() {{
+                    const audioBlob = new Blob(audioChunks, {{ type: 'audio/webm' }});
+                    sendAudioToServer(audioBlob);
+                    
+                    // 스트림 정리
+                    stream.getTracks().forEach(track => track.stop());
+                }};
+                
+                mediaRecorder.start();
+                isRecording = true;
+                
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                recordBtn.innerHTML = '🎤 녹음 중...';
+                recordBtn.style.background = 'linear-gradient(45deg, #ff4757, #ff3742)';
+                
+            }} catch (error) {{
+                console.error('마이크 접근 오류:', error);
+                if (error.name === 'NotAllowedError') {{
+                    showError('마이크 접근이 차단되었습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.');
+                }} else if (error.name === 'NotFoundError') {{
+                    showError('마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.');
+                }} else {{
+                    showError('마이크에 접근할 수 없습니다: ' + error.message);
+                }}
+            }}
+        }}
+        
+        // 녹음 중지
+        function stopRecording() {{
+            if (mediaRecorder && isRecording) {{
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+                recordBtn.innerHTML = '🎤 음성 녹음 시작';
+                recordBtn.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a24)';
+            }}
+        }}
+        
+        // 오디오를 서버로 전송
+        function sendAudioToServer(audioBlob) {{
+            if (websocket && websocket.readyState === WebSocket.OPEN) {{
+                console.log('오디오 전송:', audioBlob.size, 'bytes');
+                websocket.send(audioBlob);
+            }} else {{
+                console.error('WebSocket 연결이 없습니다');
+                showError('서버 연결이 끊어졌습니다. 잠시 후 다시 시도해주세요.');
+            }}
+        }}
+        
+        // 페이지 로드 시 WebSocket 연결
+        connectWebSocket();
+        
+        // 페이지 언로드 시 연결 정리
+        window.addEventListener('beforeunload', function() {{
+            if (websocket) {{
+                websocket.close();
+            }}
+            if (mediaRecorder && isRecording) {{
+                mediaRecorder.stop();
+            }}
+        }});
+        
+        // 브라우저 호환성 체크
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {{
+            showError('이 브라우저는 마이크 접근을 지원하지 않습니다. Chrome, Firefox, Safari 등 최신 브라우저를 사용해주세요.');
+        }}
+    </script>
+</body>
+</html>
+"""
+
+# HTML Component 렌더링
+components.html(websocket_html, height=700, scrolling=False)
+
+st.divider()
+
+# 튜터 정보 및 설정
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("👨‍🏫 현재 튜터 정보")
+    st.write(f"**이름:** {teacher_config['name']}")
+    st.write(f"**전문 분야:** {teacher_config['subject']}")
+    st.write(f"**교육 수준:** {teacher_config['level']}")
+    st.write(f"**생성 시간:** {teacher_config['created_at']}")
+
+with col2:
+    st.subheader("🎭 성격 설정")
+    personality = teacher_config['personality']
+    st.write(f"**친근함:** {personality['friendliness']}%")
+    st.write(f"**유머 수준:** {personality['humor_level']}%")
+    st.write(f"**격려 수준:** {personality['encouragement']}%")
+    st.write(f"**설명 상세도:** {personality.get('explanation_detail', 70)}%")
+
+# 사용법 안내
+with st.expander("📖 사용법 안내"):
+    st.markdown("""
+    ### 🎙️ 음성 대화 방법
+    1. **🟢 연결됨** 상태가 될 때까지 기다리세요
+    2. **🎤 음성 녹음 시작** 버튼을 클릭하세요
+    3. **마이크 권한을 허용**해주세요 (브라우저에서 요청 시)
+    4. **질문을 말씀해주세요** (예: "미적분학에 대해 설명해주세요")
+    5. **⏹️ 녹음 중지** 버튼을 클릭하세요
+    6. **AI 튜터의 답변**을 텍스트와 음성으로 들으실 수 있습니다
     
-    except WebSocketDisconnect:
-        print(f"🔌 클라이언트 {client_id} 정상 연결 해제")
-        manager.disconnect(client_id)
-    except Exception as e:
-        print(f"❌ WebSocket 오류 ({client_id}): {e}")
-        manager.disconnect(client_id)
+    ### 🔧 문제 해결
+    - **마이크 접근 오류**: 브라우저 설정에서 마이크 권한을 허용해주세요
+    - **연결 오류**: 페이지를 새로고침하거나 네트워크 상태를 확인해주세요
+    - **음성 재생 안됨**: 브라우저에서 자동 재생이 차단된 경우, 화면을 클릭한 후 다시 시도해주세요
+    """)
 
-# HTTP 엔드포인트들
-@app.get("/")
-async def root():
-    return {
-        "message": "🎓 AI Tutor Realtime System",
-        "version": "2.0.0",
-        "status": "running",
-        "config": "성능과 비용 균형 구성",
-        "endpoints": {
-            "websocket": "/ws/tutor/{client_id}",
-            "health": "/health",
-            "info": "/info"
-        }
-    }
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "active_connections": len(manager.active_connections),
-        "services": {
-            "openai": "✅" if OPENAI_API_KEY != "your-openai-api-key" else "❌",
-            "google_tts": "✅" if tts_client else "❌"
-        }
-    }
-
-@app.get("/info")
-async def system_info():
-    return {
-        "system": "AI Tutor Realtime System",
-        "architecture": "2단계: 성능과 비용 균형",
-        "components": {
-            "frontend": "Streamlit Cloud",
-            "backend": "FastAPI on Google Cloud Run",
-            "stt": "Google Cloud Speech-to-Text (TODO)",
-            "llm": "GPT-3.5 Turbo Streaming",
-            "tts": "Google Cloud TTS Standard",
-            "communication": "WebSocket"
-        },
-        "features": [
-            "실시간 음성 인식",
-            "스트리밍 AI 응답", 
-            "실시간 음성 합성",
-            "양방향 WebSocket 통신",
-            "비용 최적화된 AI 모델"
-        ]
-    }
-
-# 서버 실행 함수 (Cloud Run 및 로컬 개발용)
-def run_server():
-    """
-    서버 실행 함수
-    - 로컬 개발: python pages/teacher_mode.py
-    - Cloud Run: uvicorn pages.teacher_mode:app --host 0.0.0.0 --port $PORT
-    """
-    port = int(os.getenv("PORT", 8080))  # Cloud Run은 8080이 기본값
+# 기술 정보
+with st.expander("🔧 기술 정보"):
+    st.markdown(f"""
+    ### 시스템 구성
+    - **프론트엔드**: Streamlit Cloud
+    - **백엔드**: FastAPI (Google Cloud Run)
+    - **실시간 통신**: WebSocket
+    - **AI 모델**: GPT-3.5 Turbo Streaming
+    - **음성 합성**: Google Cloud TTS Standard
     
-    print(f"🚀 서버 시작 - 포트: {port}")
-    
-    uvicorn.run(
-        app,  # 직접 app 객체 전달 (경로 문제 해결)
-        host="0.0.0.0",
-        port=port,
-        reload=False,  # 프로덕션에서는 False
-        log_level="info"
-    )
-
-if __name__ == "__main__":
-    print("🚀 AI Tutor System 시작...")
-    print(f"📍 포트: {os.getenv('PORT', 8000)}")
-    print(f"🔑 OpenAI: {'✅' if OPENAI_API_KEY != 'your-openai-api-key' else '❌'}")
-    print(f"🎵 Google TTS: {'✅' if tts_client else '❌'}")
-    run_server()
+    ### WebSocket 연결 정보
+    - **서버 URL**: `{WEBSOCKET_URL}`
+    - **연결 상태**: 실시간 표시
+    - **자동 재연결**: 5초 후 재시도
+    """)
