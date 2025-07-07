@@ -414,7 +414,9 @@ def run_server():
     - 로컬 개발: python pages/teacher_mode.py
     - Cloud Run: uvicorn pages.teacher_mode:app --host 0.0.0.0 --port $PORT
     """
-    port = int(os.getenv("PORT", 8000))  # Cloud Run 환경변수
+    port = int(os.getenv("PORT", 8080))  # Cloud Run은 8080이 기본값
+    
+    print(f"🚀 서버 시작 - 포트: {port}")
     
     uvicorn.run(
         app,  # 직접 app 객체 전달 (경로 문제 해결)
