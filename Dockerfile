@@ -16,11 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY . .
 
-# 포트 8000 노출 (Cloud Run 기본 포트)
-EXPOSE 8000
+# 포트 8080 노출 (Cloud Run 기본 포트)
+EXPOSE 8080
 
 # 환경변수 설정 (Cloud Run용)
-ENV PORT=8000
+ENV PORT=8080
 
-# FastAPI 서버 실행 (uvicorn 직접 사용)
-CMD ["uvicorn", "pages.teacher_mode:app", "--host", "0.0.0.0", "--port", "8000"]
+# FastAPI 서버 실행 (Python 스크립트 사용)
+CMD ["python", "pages/teacher_mode.py"]
