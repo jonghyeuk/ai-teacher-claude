@@ -23,4 +23,4 @@ EXPOSE 8080
 ENV PORT=8080
 
 # FastAPI 서버 실행 (Python 스크립트 사용)
-CMD ["python", "pages/teacher_mode.py"]
+CMD ["python", "run.py"]
