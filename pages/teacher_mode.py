@@ -48,7 +48,7 @@ openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 # Google TTS 클라이언트 초기화 (기존 유지)
 tts_client = texttospeech.TextToSpeechClient()
 
-# Google STT 클라이언트 초기화 (추가)
+# Google STT 클라이언트 초기화 (기존 유지)
 speech_client = speech.SpeechClient()
 
 # 전역 변수 (기존 유지)
@@ -115,7 +115,7 @@ async def system_info():
         }
     }
 
-# WebSocket 엔드포인트 (수정됨 - 에러 핸들링 강화)
+# WebSocket 엔드포인트 (기존 유지)
 @app.websocket("/ws/tutor/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
@@ -171,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         print(f"🔄 클라이언트 {client_id} 정리 완료")
 
 async def handle_text_message(websocket: WebSocket, message: dict, client_id: str):
-    """텍스트 메시지 처리 (튜터 설정 등)"""
+    """텍스트 메시지 처리 (기존 유지)"""
     try:
         if message.get("type") == "config_update":
             # 튜터 설정 업데이트 (voice_settings 포함)
@@ -203,18 +203,33 @@ async def handle_text_message(websocket: WebSocket, message: dict, client_id: st
         })
 
 async def handle_audio_message(websocket: WebSocket, audio_data: bytes, client_id: str):
-    """오디오 메시지 처리 (수정됨 - 실제 STT 구현)"""
+    """오디오 메시지 처리 (개선된 버전)"""
     try:
         print(f"🎤 오디오 수신: {len(audio_data)} bytes from {client_id}")
         
+        # 오디오 데이터 유효성 검사
+        if len(audio_data) < 1000:  # 너무 짧은 오디오
+            await websocket.send_json({
+                "type": "error", 
+                "message": "녹음이 너무 짧습니다. 조금 더 길게 말씀해주세요."
+            })
+            return
+        
+        if len(audio_data) > 10 * 1024 * 1024:  # 10MB 초과
+            await websocket.send_json({
+                "type": "error", 
+                "message": "녹음이 너무 깁니다. 짧게 나누어서 말씀해주세요."
+            })
+            return
+        
         # STT 처리
         transcript = await process_speech_to_text(audio_data)
-        print(f"🔤 STT 결과: '{transcript}'")
+        print(f"🔤 최종 STT 결과: '{transcript}'")
         
         if not transcript or transcript.strip() == "":
             await websocket.send_json({
                 "type": "error", 
-                "message": "음성을 인식할 수 없었습니다. 다시 시도해주세요."
+                "message": "음성을 인식할 수 없었습니다. 명확하게 말씀해주시고 다시 시도해주세요."
             })
             return
         
@@ -235,36 +250,99 @@ async def handle_audio_message(websocket: WebSocket, audio_data: bytes, client_i
         })
 
 async def process_speech_to_text(audio_data: bytes) -> str:
-    """Google Speech-to-Text 처리 (수정됨 - 실제 STT 구현)"""
+    """Google Speech-to-Text 처리 (개선된 버전)"""
     try:
-        # Google STT 설정
-        config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
-            sample_rate_hertz=48000,
-            language_code="ko-KR",
-            enable_automatic_punctuation=True,
-            model="latest_short"
-        )
+        print(f"🎤 STT 처리 시작: {len(audio_data)} bytes")
         
-        audio = speech.RecognitionAudio(content=audio_data)
+        # 다양한 설정으로 시도
+        configs_to_try = [
+            # 설정 1: WEBM_OPUS (최신 브라우저)
+            {
+                "encoding": speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+                "sample_rate_hertz": 48000,
+                "description": "WEBM_OPUS 48kHz"
+            },
+            # 설정 2: WEBM_OPUS (낮은 샘플레이트)
+            {
+                "encoding": speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+                "sample_rate_hertz": 16000,
+                "description": "WEBM_OPUS 16kHz"
+            },
+            # 설정 3: OGG_OPUS (대안)
+            {
+                "encoding": speech.RecognitionConfig.AudioEncoding.OGG_OPUS,
+                "sample_rate_hertz": 48000,
+                "description": "OGG_OPUS 48kHz"
+            },
+            # 설정 4: 자동 감지
+            {
+                "encoding": speech.RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED,
+                "sample_rate_hertz": 48000,
+                "description": "AUTO_DETECT"
+            }
+        ]
         
-        # STT 요청
-        response = speech_client.recognize(config=config, audio=audio)
+        for i, config_params in enumerate(configs_to_try):
+            try:
+                print(f"🔄 STT 시도 {i+1}: {config_params['description']}")
+                
+                config = speech.RecognitionConfig(
+                    encoding=config_params["encoding"],
+                    sample_rate_hertz=config_params["sample_rate_hertz"],
+                    language_code="ko-KR",
+                    enable_automatic_punctuation=True,
+                    model="latest_short",
+                    # 추가 개선 설정
+                    enable_word_time_offsets=False,
+                    enable_word_confidence=True,
+                    use_enhanced=True,  # 향상된 모델 사용
+                    alternative_language_codes=["en-US"]  # 영어 혼재 대응
+                )
+                
+                audio = speech.RecognitionAudio(content=audio_data)
+                
+                # STT 요청 (타임아웃 추가)
+                response = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        lambda: speech_client.recognize(config=config, audio=audio)
+                    ),
+                    timeout=10.0
+                )
+                
+                if response.results:
+                    transcript = response.results[0].alternatives[0].transcript
+                    confidence = response.results[0].alternatives[0].confidence
+                    
+                    print(f"✅ STT 성공 ({config_params['description']})")
+                    print(f"📝 결과: '{transcript}' (신뢰도: {confidence:.2f})")
+                    
+                    # 신뢰도가 너무 낮으면 다음 설정 시도
+                    if confidence < 0.3:
+                        print(f"⚠️ 신뢰도 낮음 ({confidence:.2f}), 다음 설정 시도")
+                        continue
+                    
+                    return transcript.strip()
+                else:
+                    print(f"⚠️ STT 결과 없음 ({config_params['description']})")
+                    
+            except asyncio.TimeoutError:
+                print(f"⏰ STT 타임아웃 ({config_params['description']})")
+                continue
+            except Exception as e:
+                print(f"⚠️ STT 설정 {i+1} 실패: {str(e)}")
+                continue
         
-        if response.results:
-            transcript = response.results[0].alternatives[0].transcript
-            return transcript.strip()
-        else:
-            print("⚠️ STT 결과 없음")
-            return ""
-            
+        # 모든 설정 실패
+        print("❌ 모든 STT 설정 실패")
+        return ""
+        
     except Exception as e:
-        print(f"⚠️ STT 오류: {str(e)}")
-        # STT 실패 시 빈 문자열 반환
+        print(f"⚠️ STT 전체 처리 오류: {str(e)}")
         return ""
 
 async def generate_ai_response(websocket: WebSocket, user_input: str, client_id: str):
-    """AI 응답 생성 (수정됨 - 튜터 설정 반영)"""
+    """AI 응답 생성 (기존 유지)"""
     try:
         # 튜터 설정 가져오기
         tutor_config = tutor_configs.get(client_id, {})
@@ -314,7 +392,7 @@ async def generate_ai_response(websocket: WebSocket, user_input: str, client_id:
         })
 
 def create_tutor_prompt(tutor_config: dict, user_input: str) -> str:
-    """튜터 설정 기반 프롬프트 생성 (수정됨 - 개성 반영)"""
+    """튜터 설정 기반 프롬프트 생성 (기존 유지)"""
     
     # 기본 정보
     name = tutor_config.get("name", "AI 튜터")
