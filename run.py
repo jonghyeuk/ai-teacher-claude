@@ -3,6 +3,7 @@
 AI 튜터 FastAPI 서버
 
 Cloud Run에서 실행되는 FastAPI 백엔드 서버입니다.
+음성 중첩 문제가 해결된 버전입니다.
 """
 
 import asyncio
@@ -237,7 +238,7 @@ async def handle_audio_message(websocket: WebSocket, audio_data: bytes, client_i
         })
 
 async def process_speech_to_text(audio_data: bytes) -> str:
-    """Google Speech-to-Text 처리 (개선된 버전)"""
+    """Google Speech-to-Text 처리"""
     try:
         print(f"🎤 STT 처리 시작: {len(audio_data)} bytes")
         
@@ -256,6 +257,11 @@ async def process_speech_to_text(audio_data: bytes) -> str:
                 "encoding": speech.RecognitionConfig.AudioEncoding.OGG_OPUS,
                 "sample_rate_hertz": 48000,
                 "description": "OGG_OPUS 48kHz"
+            },
+            {
+                "encoding": speech.RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED,
+                "sample_rate_hertz": 48000,
+                "description": "AUTO_DETECT"
             }
         ]
         
@@ -314,7 +320,7 @@ async def process_speech_to_text(audio_data: bytes) -> str:
         return ""
 
 async def generate_ai_response(websocket: WebSocket, user_input: str, client_id: str):
-    """AI 응답 생성"""
+    """AI 응답 생성 (수정됨 - 음성 중첩 문제 해결)"""
     try:
         tutor_config = tutor_configs.get(client_id, {})
         tutor_prompt = create_tutor_prompt(tutor_config, user_input)
@@ -332,23 +338,25 @@ async def generate_ai_response(websocket: WebSocket, user_input: str, client_id:
         )
         
         response_text = ""
-        sentence_buffer = ""
         
+        # 전체 응답을 수집하면서 실시간으로 텍스트 표시
         async for chunk in stream:
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 response_text += content
-                sentence_buffer += content
                 
-                if any(punct in content for punct in ['.', '!', '?', '다', '요', '죠', '니다', '습니다']):
-                    if sentence_buffer.strip():
-                        await process_and_send_tts(websocket, sentence_buffer.strip())
-                        sentence_buffer = ""
+                # 실시간 텍스트 표시 (TTS 없이)
+                await websocket.send_json({
+                    "type": "text_chunk",
+                    "content": content
+                })
         
-        if sentence_buffer.strip():
-            await process_and_send_tts(websocket, sentence_buffer.strip())
+        # 전체 응답이 완료되면 한 번에 TTS 처리
+        if response_text.strip():
+            print(f"💬 전체 응답 완료, TTS 처리 시작: {response_text}")
+            await process_and_send_tts(websocket, response_text.strip())
             
-        print(f"💬 완성된 응답: {response_text}")
+        print(f"✅ 응답 처리 완료: {len(response_text)} 글자")
         
     except Exception as e:
         print(f"⚠️ AI 응답 생성 오류: {str(e)}")
@@ -421,6 +429,8 @@ def create_tutor_prompt(tutor_config: dict, user_input: str) -> str:
 async def process_and_send_tts(websocket: WebSocket, text: str):
     """TTS 처리 및 전송"""
     try:
+        print(f"🔊 TTS 처리 시작: {text[:50]}...")
+        
         synthesis_input = texttospeech.SynthesisInput(text=text)
         
         voice = texttospeech.VoiceSelectionParams(
@@ -440,14 +450,18 @@ async def process_and_send_tts(websocket: WebSocket, text: str):
         
         audio_base64 = base64.b64encode(response.audio_content).decode('utf-8')
         
+        # 단일 오디오 청크로 전송
         await websocket.send_json({
             "type": "audio_chunk",
             "content": text,
             "audio": audio_base64
         })
         
+        print(f"✅ TTS 전송 완료: {len(response.audio_content)} bytes")
+        
     except Exception as e:
         print(f"⚠️ TTS 처리 오류: {str(e)}")
+        # TTS 실패 시 텍스트만 전송
         await websocket.send_json({
             "type": "text_chunk",
             "content": text
@@ -456,4 +470,5 @@ async def process_and_send_tts(websocket: WebSocket, text: str):
 # 서버 실행 (Cloud Run용)
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
+    print(f"🚀 AI 튜터 서버 시작: 포트 {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
