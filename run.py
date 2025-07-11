@@ -3,7 +3,7 @@
 AI 튜터 FastAPI 서버
 
 Cloud Run에서 실행되는 FastAPI 백엔드 서버입니다.
-음성 중첩 문제가 해결된 버전입니다.
+음성 입력과 텍스트 입력을 모두 지원합니다.
 """
 
 import asyncio
@@ -27,8 +27,8 @@ import httpx
 # FastAPI 앱 초기화
 app = FastAPI(
     title="AI Tutor Realtime System",
-    description="실시간 AI 튜터 시스템",
-    version="2.0.0"
+    description="실시간 AI 튜터 시스템 (음성 + 텍스트)",
+    version="2.1.0"
 )
 
 # CORS 설정
@@ -63,8 +63,9 @@ tutor_configs: Dict[str, Dict[str, Any]] = {}
 async def root():
     return {
         "message": "🎓 AI Tutor Realtime System",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "status": "running",
+        "features": ["음성 입력 (STT)", "텍스트 입력", "음성 출력 (TTS)"],
         "config": "성능과 비용 균형 구성",
         "endpoints": {
             "websocket": "/ws/tutor/{client_id}",
@@ -91,7 +92,8 @@ async def health_check():
             "active_connections": len(active_connections),
             "services": {
                 "openai": openai_status,
-                "google_tts": tts_status
+                "google_tts": tts_status,
+                "google_stt": "✅"
             }
         }
     except Exception as e:
@@ -105,7 +107,10 @@ async def system_info():
     """시스템 정보"""
     return {
         "system": "AI Tutor Realtime System",
+        "version": "2.1.0",
         "architecture": "2단계: 성능과 비용 균형",
+        "input_methods": ["음성 (STT)", "텍스트"],
+        "output_methods": ["텍스트", "음성 (TTS)"],
         "components": {
             "frontend": "Streamlit Cloud",
             "backend": "FastAPI on Google Cloud Run",
@@ -125,7 +130,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     try:
         await websocket.send_json({
             "type": "connection_established",
-            "message": f"🎓 AI 튜터와 연결되었습니다!"
+            "message": f"🎓 AI 튜터와 연결되었습니다! (음성 + 텍스트 지원)"
         })
         
         while True:
@@ -165,9 +170,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         print(f"🔄 클라이언트 {client_id} 정리 완료")
 
 async def handle_text_message(websocket: WebSocket, message: dict, client_id: str):
-    """텍스트 메시지 처리"""
+    """텍스트 메시지 처리 (음성 + 텍스트 입력 지원)"""
     try:
-        if message.get("type") == "config_update":
+        message_type = message.get("type")
+        
+        if message_type == "config_update":
+            # 튜터 설정 업데이트
             config = message.get("config", {})
             
             if "voice_settings" not in config:
@@ -184,8 +192,25 @@ async def handle_text_message(websocket: WebSocket, message: dict, client_id: st
                 "type": "config_updated",
                 "message": "튜터 설정이 업데이트되었습니다."
             })
+            
+        elif message_type == "user_text":
+            # 사용자 텍스트 입력 처리
+            user_text = message.get("text", "").strip()
+            
+            if not user_text:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "텍스트가 비어있습니다."
+                })
+                return
+            
+            print(f"💬 사용자 텍스트 입력: '{user_text}' from {client_id}")
+            
+            # AI 응답 생성 및 TTS
+            await generate_ai_response(websocket, user_text, client_id)
+            
         else:
-            print(f"⚠️ 알 수 없는 메시지 타입: {message.get('type')}")
+            print(f"⚠️ 알 수 없는 메시지 타입: {message_type}")
             
     except Exception as e:
         print(f"⚠️ 텍스트 메시지 처리 오류: {str(e)}")
@@ -320,7 +345,7 @@ async def process_speech_to_text(audio_data: bytes) -> str:
         return ""
 
 async def generate_ai_response(websocket: WebSocket, user_input: str, client_id: str):
-    """AI 응답 생성 (수정됨 - 음성 중첩 문제 해결)"""
+    """AI 응답 생성 (음성 중첩 문제 해결)"""
     try:
         tutor_config = tutor_configs.get(client_id, {})
         tutor_prompt = create_tutor_prompt(tutor_config, user_input)
@@ -470,5 +495,5 @@ async def process_and_send_tts(websocket: WebSocket, text: str):
 # 서버 실행 (Cloud Run용)
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
-    print(f"🚀 AI 튜터 서버 시작: 포트 {port}")
+    print(f"🚀 AI 튜터 서버 시작 (음성 + 텍스트 지원): 포트 {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
