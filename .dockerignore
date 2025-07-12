@@ -4,7 +4,7 @@
 README.md
 
 # Python
-__pycache__
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -38,8 +38,12 @@ Thumbs.db
 *.swp
 *.swo
 
-# Streamlit (불필요한 파일들)
+# Streamlit 프론트엔드 파일들 (백엔드 배포에서 제외)
 .streamlit/
-*.py
-!pages/teacher_mode.py
-!pages/__init__.py
+pages/teacher_mode.py
+pages/__init__.py
+
+# 백엔드 핵심 파일들은 포함되어야 함
+# run.py - 메인 FastAPI 애플리케이션
+# requirements.txt - 의존성 파일
+# Dockerfile - 이미 처리됨
