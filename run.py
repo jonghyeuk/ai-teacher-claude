@@ -9,6 +9,7 @@ AI 튜터 FastAPI 백엔드 애플리케이션
 - Google TTS 음성 출력
 - 음성 중첩 문제 해결
 - 튜터 개성화 시스템
+- 대화 상태 관리 및 자연스러운 스트리밍
 """
 
 import asyncio
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="AI Tutor Realtime System",
     description="실시간 AI 튜터 시스템 - 음성 및 텍스트 입력 지원",
-    version="2.1.0",
+    version="2.1.1",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -85,6 +86,7 @@ except Exception as e:
 # 전역 변수
 active_connections: Dict[str, WebSocket] = {}
 tutor_configs: Dict[str, Dict[str, Any]] = {}
+response_in_progress: set = set()  # 응답 상태 관리
 
 # 기본 엔드포인트들
 @app.get("/")
@@ -92,7 +94,7 @@ async def root():
     """메인 페이지 - 시스템 정보"""
     return {
         "message": "🎓 AI Tutor Realtime System",
-        "version": "2.1.0",
+        "version": "2.1.1",
         "status": "running",
         "features": [
             "음성 입력 (STT)",
@@ -100,7 +102,9 @@ async def root():
             "음성 출력 (TTS)",
             "실시간 스트리밍",
             "튜터 개성화",
-            "다중 입력 방식"
+            "다중 입력 방식",
+            "대화 상태 관리",
+            "자연스러운 청킹"
         ],
         "config": "성능과 비용 균형 구성",
         "endpoints": {
@@ -136,6 +140,7 @@ async def health_check():
             "timestamp": datetime.now().isoformat(),
             "active_connections": len(active_connections),
             "active_tutors": len(tutor_configs),
+            "active_responses": len(response_in_progress),
             "services": {
                 "openai_gpt": openai_status,
                 "google_tts": tts_status,
@@ -162,7 +167,7 @@ async def system_info():
     """상세 시스템 정보"""
     return {
         "system": "AI Tutor Realtime System",
-        "version": "2.1.0",
+        "version": "2.1.1",
         "architecture": "마이크로서비스 아키텍처",
         "deployment": "Google Cloud Run",
         "input_methods": {
@@ -182,7 +187,7 @@ async def system_info():
             "text": {
                 "streaming": True,
                 "real_time": True,
-                "format": "타이핑 효과"
+                "format": "자연스러운 단어 단위 스트리밍"
             },
             "voice": {
                 "engine": "Google Cloud Text-to-Speech",
@@ -227,6 +232,10 @@ async def get_statistics():
             "active": len(tutor_configs),
             "configurations": list(tutor_configs.keys())
         },
+        "responses": {
+            "in_progress": len(response_in_progress),
+            "active_clients": list(response_in_progress)
+        },
         "timestamp": datetime.now().isoformat()
     }
 
@@ -245,7 +254,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             "message": "🎓 AI 튜터와 연결되었습니다! (음성 + 텍스트 지원)",
             "client_id": client_id,
             "timestamp": datetime.now().isoformat(),
-            "features": ["voice_input", "text_input", "voice_output", "real_time_streaming"]
+            "features": ["voice_input", "text_input", "voice_output", "real_time_streaming", "state_management"]
         })
         
         # 메인 메시지 루프
@@ -295,10 +304,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             del active_connections[client_id]
         if client_id in tutor_configs:
             del tutor_configs[client_id]
+        response_in_progress.discard(client_id)
         logger.info(f"🔄 클라이언트 {client_id} 정리 완료")
 
 async def handle_text_message(websocket: WebSocket, message: dict, client_id: str):
-    """텍스트 메시지 처리 (설정 업데이트 + 사용자 텍스트 입력)"""
+    """텍스트 메시지 처리"""
     try:
         message_type = message.get("type")
         logger.info(f"📨 텍스트 메시지 수신: {message_type} from {client_id}")
@@ -329,6 +339,14 @@ async def handle_text_message(websocket: WebSocket, message: dict, client_id: st
             })
             
         elif message_type == "user_text":
+            # 응답 진행 중 체크
+            if client_id in response_in_progress:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "이전 응답이 진행 중입니다. 잠시만 기다려주세요."
+                })
+                return
+            
             # 사용자 텍스트 입력 처리
             user_text = message.get("text", "").strip()
             
@@ -373,8 +391,16 @@ async def handle_text_message(websocket: WebSocket, message: dict, client_id: st
         })
 
 async def handle_audio_message(websocket: WebSocket, audio_data: bytes, client_id: str):
-    """오디오 메시지 처리 (STT → AI 응답)"""
+    """오디오 메시지 처리"""
     try:
+        # 응답 진행 중 체크
+        if client_id in response_in_progress:
+            await websocket.send_json({
+                "type": "error",
+                "message": "이전 응답이 진행 중입니다. 잠시만 기다려주세요."
+            })
+            return
+        
         logger.info(f"🎤 오디오 수신: {len(audio_data)} bytes from {client_id}")
         
         # 오디오 크기 검증
@@ -421,7 +447,7 @@ async def handle_audio_message(websocket: WebSocket, audio_data: bytes, client_i
         })
 
 async def process_speech_to_text(audio_data: bytes) -> str:
-    """Google Speech-to-Text 처리 (다중 설정 시도)"""
+    """Google Speech-to-Text 처리"""
     if not speech_client:
         logger.error("STT 클라이언트가 초기화되지 않았습니다.")
         return ""
@@ -509,52 +535,100 @@ async def process_speech_to_text(audio_data: bytes) -> str:
         return ""
 
 async def generate_ai_response(websocket: WebSocket, user_input: str, client_id: str):
-    """AI 응답 생성 (GPT-3.5 스트리밍 + TTS)"""
+    """AI 응답 생성 - 충돌 없는 개선된 스트리밍"""
     try:
-        tutor_config = tutor_configs.get(client_id, {})
-        tutor_prompt = create_tutor_prompt(tutor_config, user_input)
+        # 응답 상태 체크
+        if client_id in response_in_progress:
+            logger.warning(f"응답 진행 중 - 새 요청 무시: {client_id}")
+            await websocket.send_json({
+                "type": "error",
+                "message": "이전 응답이 진행 중입니다. 잠시 후 다시 시도해주세요."
+            })
+            return
         
-        logger.info(f"🤖 AI 응답 생성 시작: '{user_input[:30]}...' for {tutor_config.get('name', 'Unknown')}")
+        # 응답 상태 설정
+        response_in_progress.add(client_id)
         
-        # GPT 스트리밍 요청
-        stream = await openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": tutor_prompt},
-                {"role": "user", "content": user_input}
-            ],
-            max_tokens=300,
-            temperature=0.7,
-            stream=True
-        )
-        
-        response_text = ""
-        
-        # 스트리밍 응답 처리
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                response_text += content
-                
-                # 실시간 텍스트 표시 (TTS 없이)
+        try:
+            tutor_config = tutor_configs.get(client_id, {})
+            tutor_prompt = create_tutor_prompt(tutor_config, user_input)
+            
+            logger.info(f"🤖 AI 응답 생성 시작: '{user_input[:30]}...' for {tutor_config.get('name', 'Unknown')}")
+            
+            # 응답 시작 알림
+            await websocket.send_json({
+                "type": "response_start",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # GPT 스트리밍 요청
+            stream = await openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": tutor_prompt},
+                    {"role": "user", "content": user_input}
+                ],
+                max_tokens=300,
+                temperature=0.7,
+                stream=True
+            )
+            
+            response_text = ""
+            word_buffer = ""
+            
+            # 개선된 스트리밍 처리 (단어 단위)
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    response_text += content
+                    word_buffer += content
+                    
+                    # 단어 단위로 전송 (공백이나 구두점에서)
+                    if any(char in content for char in [' ', '\n', '\t']) or chunk.choices[0].finish_reason:
+                        if word_buffer.strip():
+                            await websocket.send_json({
+                                "type": "text_chunk",
+                                "content": word_buffer,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            word_buffer = ""
+                            # 자연스러운 타이핑 효과
+                            await asyncio.sleep(0.05)
+            
+            # 남은 텍스트 전송
+            if word_buffer.strip():
                 await websocket.send_json({
                     "type": "text_chunk",
-                    "content": content,
+                    "content": word_buffer,
                     "timestamp": datetime.now().isoformat()
                 })
-        
-        # 전체 응답 완료 후 TTS 처리
-        if response_text.strip():
-            logger.info(f"💬 응답 완료 ({len(response_text)}자), TTS 처리 시작")
-            await process_and_send_tts(websocket, response_text.strip())
-        
-        logger.info(f"✅ AI 응답 처리 완료: {client_id}")
+            
+            # 응답 완료 알림
+            await websocket.send_json({
+                "type": "response_complete",
+                "total_length": len(response_text),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # 전체 응답 완료 후 TTS 처리
+            if response_text.strip():
+                logger.info(f"💬 응답 완료 ({len(response_text)}자), TTS 처리 시작")
+                await process_and_send_tts(websocket, response_text.strip())
+            
+            logger.info(f"✅ AI 응답 처리 완료: {client_id}")
+            
+        finally:
+            # 응답 상태 해제
+            response_in_progress.discard(client_id)
         
     except Exception as e:
+        # 에러 시에도 상태 해제
+        response_in_progress.discard(client_id)
         logger.error(f"⚠️ AI 응답 생성 오류 {client_id}: {str(e)}")
         await websocket.send_json({
             "type": "error",
-            "message": f"AI 응답 생성 중 오류가 발생했습니다: {str(e)}"
+            "message": f"AI 응답 생성 중 오류가 발생했습니다: {str(e)}",
+            "timestamp": datetime.now().isoformat()
         })
 
 def create_tutor_prompt(tutor_config: dict, user_input: str) -> str:
@@ -625,7 +699,7 @@ def create_tutor_prompt(tutor_config: dict, user_input: str) -> str:
     return prompt
 
 async def process_and_send_tts(websocket: WebSocket, text: str):
-    """TTS 처리 및 전송 (단일 오디오 출력)"""
+    """TTS 처리 및 전송"""
     if not tts_client:
         logger.warning("TTS 클라이언트가 비활성화되어 텍스트만 전송합니다.")
         await websocket.send_json({
@@ -694,7 +768,7 @@ async def global_exception_handler(request, exc):
         }
     )
 
-# 서버 실행 (Cloud Run용)
+# 서버 실행
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     log_level = os.getenv("LOG_LEVEL", "info")
@@ -705,6 +779,8 @@ if __name__ == "__main__":
     logger.info(f"🔊 음성 출력: {'✅ 활성화' if tts_client else '❌ 비활성화'}")
     logger.info(f"💬 텍스트 입력: ✅ 활성화")
     logger.info(f"🤖 AI 모델: GPT-3.5 Turbo")
+    logger.info(f"🔄 상태 관리: ✅ 활성화")
+    logger.info(f"📝 스트리밍: ✅ 단어 단위 자연스러운 처리")
     
     uvicorn.run(
         app, 
