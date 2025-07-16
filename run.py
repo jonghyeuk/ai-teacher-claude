@@ -587,7 +587,7 @@ def get_enhanced_voice_config(tutor_config: Dict[str, Any], client_id: str) -> t
     """언어교육 AI 수준의 자연스러운 음성 설정"""
     
     # WaveNet 기반 고품질 음성 사용 (기존 Standard-A → Wavenet-A)
-    voice_name = "ko-KR-Wavenet-A"  # 핵심 업그레이드!
+    voice_name = "ko-KR-Standard-A"  # 핵심 업그레이드!
     
     # 튜터 성격에 따른 음성 선택 (향후 확장 가능)
     personality = tutor_config.get("personality", {})
@@ -595,11 +595,11 @@ def get_enhanced_voice_config(tutor_config: Dict[str, Any], client_id: str) -> t
     
     # 친근함이 높으면 부드러운 음성, 낮으면 차분한 음성
     if friendliness >= 80:
-        voice_name = "ko-KR-Wavenet-A"  # 부드럽고 친근한 여성 음성
+        voice_name = "ko-KR-Standard-A"  # 부드럽고 친근한 여성 음성
     elif friendliness <= 40:
-        voice_name = "ko-KR-Wavenet-C"  # 차분하고 전문적인 남성 음성
+        voice_name = "ko-KR-Standard-A"  # 차분하고 전문적인 남성 음성
     else:
-        voice_name = "ko-KR-Wavenet-A"  # 기본값
+        voice_name = "ko-KR-Standard-A"  # 기본값
     
     return texttospeech.VoiceSelectionParams(
         language_code="ko-KR",
